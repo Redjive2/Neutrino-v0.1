@@ -1,10 +1,8 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"neutrino/actions"
 	"neutrino/core"
@@ -12,7 +10,6 @@ import (
 	"neutrino/serial"
 	"os"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -126,16 +123,7 @@ func main() {
 	mux.HandleFunc("/app.js", FileServer("../Neutrino Site/app.js"))
 	mux.HandleFunc("/favicon.ico", FileServer("../Neutrino Site/favicon.ico"))
 
-	// Listen with SO_REUSEADDR so the port is available immediately after restart.
-	lc := net.ListenConfig{
-		Control: func(network, address string, c syscall.RawConn) error {
-			return c.Control(func(fd uintptr) {
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-			})
-		},
-	}
-
-	ln, err := lc.Listen(context.Background(), "tcp", ":8080")
+	ln, err := listen(":8080")
 	if err != nil {
 		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  FATAL: could not listen on :8080: " + err.Error())
 		os.Exit(1)

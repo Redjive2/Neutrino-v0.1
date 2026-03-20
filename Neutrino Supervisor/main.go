@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"syscall"
+	"runtime"
 	"time"
 )
 
@@ -57,7 +57,7 @@ func run(dir string) int {
 	cmd.Stderr = os.Stderr
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, os.Interrupt)
 
 	if err := cmd.Start(); err != nil {
 		log("ERROR: could not start server: " + err.Error())
@@ -65,12 +65,16 @@ func run(dir string) int {
 		return 1
 	}
 
-	go func() {
-		sig, ok := <-sigCh
-		if ok && cmd.Process != nil {
-			cmd.Process.Signal(sig)
-		}
-	}()
+	// On Windows, Ctrl+C is automatically sent to all processes in the console
+	// group, so no forwarding is needed. On Unix, we forward the signal.
+	if runtime.GOOS != "windows" {
+		go func() {
+			sig, ok := <-sigCh
+			if ok && cmd.Process != nil {
+				cmd.Process.Signal(sig)
+			}
+		}()
+	}
 
 	err := cmd.Wait()
 	signal.Stop(sigCh)
