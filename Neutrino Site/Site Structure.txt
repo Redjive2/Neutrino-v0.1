@@ -1,0 +1,519 @@
+================================================================================
+  NEUTRINO FRONTEND — SITE STRUCTURE OVERVIEW
+================================================================================
+
+Last updated: 2026-03-20
+
+FILES
+--------------------------------------------------------------------------------
+  Neutrino.htm        Main (and only) HTML page — the full app shell
+  style.css           All styles, organised by component
+  app.js              All behaviour, data-fetching, and rendering logic
+  favicon.ico         Crosshair icon (16/32/48px multi-size ICO)
+  Site Structure.txt  This file
+
+
+================================================================================
+  MARKUP  (Neutrino.htm)
+================================================================================
+
+The page is a single-page application shell.  Nothing is server-rendered; all
+dynamic content is injected by app.js at runtime.
+
+TOP-LEVEL STRUCTURE
+-------------------
+<body>
+  ├── #login-overlay          Full-screen login/register modal (hidden until needed)
+  ├── .app                    Main flex container — holds every panel
+  │   ├── <nav>.server-list   Left-most column: server icons + add button
+  │   ├── <aside>.channel-sidebar
+  │   │   ├── .server-header  Server name + delete/leave buttons + owner menu
+  │   │   ├── #channel-list   Dynamically filled: categories → channels
+  │   │   └── .user-panel     Current user avatar, name, settings cog
+  │   │       └── #account-menu  Dropdown: profile pic, username, password, logout
+  │   ├── <main>.chat-area
+  │   │   ├── .chat-header    Channel name, topic, member-list toggle
+  │   │   ├── #messages-container  Scrollable message feed
+  │   │   └── .message-input-area
+  │   │       ├── #attachment-preview-strip  Pending upload thumbnails
+  │   │       └── .input-wrapper
+  │   │           ├── #attach-btn    Opens file picker
+  │   │           ├── #message-input Text input
+  │   │           └── #emoji-btn     Opens emoji picker
+  │   ├── <aside>#members-sidebar  Right column: channel member list
+  │   └── #explore-panel      Full-width overlay shown when browsing servers
+  ├── #emoji-picker           Floating emoji grid (position: fixed)
+  └── #file-input             Hidden <input type="file"> for attachment uploads
+
+LOGIN OVERLAY (#login-overlay)
+-------------------------------
+  Two tabs: "Log In" / "Register"
+  #login-form     username + password + submit
+  #register-form  username + password + submit  (display:none by default)
+  #login-error / #reg-error  Inline feedback text
+
+SERVER HEADER (.server-header)
+-------------------------------
+  .server-name              Server display name
+  #delete-server-btn        Trash icon — owner only, hidden by default
+  #leave-server-btn         Exit icon — non-owners only, hidden by default
+  #server-menu-btn          Dropdown arrow — owner only
+  #server-menu              Owner dropdown: Change Thumbnail, Remove Thumbnail,
+                            Make Private / Make Public
+
+CHANNEL LIST (#channel-list)  [dynamically built]
+--------------------------------------------------
+  .channel-category   Category header row (toggle arrow, name, +channel, ×delete)
+  .channel            Individual channel row (# icon, name, ×delete)
+  .add-category-row   "Add Category" button at the bottom
+
+MESSAGES (#messages-container)  [dynamically built]
+----------------------------------------------------
+  .load-more-container / .load-more-btn  — shown when older pages exist
+  .welcome-message                       — shown when at the start of history
+  .message[.message-group-start]         — one per message
+    .message-avatar     Square avatar: letter OR <img> for profile pic
+    .message-content
+      .message-header   author name + timestamp  (only on group start)
+      .message-text     Formatted message body
+      .message-attachments  (optional) inline images / videos
+    .message-actions    Hover toolbar with delete button
+
+MEMBER LIST (#members-sidebar)  [dynamically built]
+----------------------------------------------------
+  .member-header-row    "MEMBERS — N" label + invite (+) button (owner only)
+  .add-member-dropdown  Dropdown showing server members not in channel (owner only)
+  .member               Avatar + name + optional kick (×) button
+
+ACCOUNT MENU (#account-menu)  [defined in HTML, toggled via JS]
+--------------------------------------------------------------------------
+  Change Profile Picture
+  Change Username
+  Change Password
+  ──────────────
+  Log Out
+  Delete Account  (danger style)
+
+
+================================================================================
+  STYLES  (style.css)
+================================================================================
+
+SECTIONS (in order)
+-------------------
+  Reset & Base          Box-sizing, scrollbar, font defaults
+  CSS variables (:root)
+    --bg-primary/secondary/tertiary   Dark backgrounds (darkest = tertiary)
+    --bg-floating                     Dropdown/popup background
+    --bg-modifier-hover/active/selected
+    --brand-color / --brand-hover     Red (#c0392b)
+    --text-normal / --text-muted      Light grey / dim grey
+    --input-bg, --border, --font, --font-mono
+  App Layout            .app flex container
+  Server List           .server-list, .server-icon variants (active, home, add)
+                        Drag-and-drop reordering support
+  Channel Sidebar       .channel-sidebar, .server-header, .channel-list
+                        .channel-category, .channel, .add-category-row
+                        .delete-server-btn, .leave-server-btn
+                        .dropdown-arrow, .server-menu
+  User Panel            .user-panel, .user-avatar, .user-info, .account-menu
+  Chat Area             .chat-area, .chat-header
+  Messages              .messages-container, .load-more-*, .welcome-message,
+                        .message, .message-avatar, .message-content,
+                        .message-header, .message-text, .message-actions
+  Message Input         .message-input-area, .input-wrapper, .attach-btn,
+                        #message-input, .emoji-btn
+  Members Sidebar       .members-sidebar, .member, .member-avatar,
+                        .kick-btn, .invite-user-btn
+                        .add-member-dropdown, .add-member-item, .add-member-empty
+  Emoji Picker          .emoji-picker, .emoji-grid, .emoji-item
+  Login Overlay         .login-overlay, .login-box, .login-tab, .btn-primary
+  Explore Panel         .explore-panel, .explore-grid, .explore-card
+  Attachment Preview    .attachment-preview-strip, .attachment-preview-item,
+                        .attachment-preview-thumb, .attachment-preview-icon,
+                        .attachment-preview-name, .attachment-preview-remove
+  Message Attachments   .message-attachments, .message-img, .message-video
+  Profile Pictures      img rule inside .user-avatar / .message-avatar /
+                        .member-avatar (fills the container, covers the letter)
+  Animations            @keyframes fadeIn applied to .message
+
+
+================================================================================
+  JAVASCRIPT  (app.js)
+================================================================================
+
+SECTION MAP (in file order)
+----------------------------
+  Constants & helpers       EMOJIS, enc(), tokenToHex()
+  Session                   loadSession, saveSession, clearSession, authBody
+  API Client                apiPost, _apiPost, apiUpload, _apiUpload,
+                            checkSessionAlive
+  Caches                    profilePicCache, serverThumbnailCache,
+                            ensureProfilePics
+  Navigation state          All current* vars, poll timers, etc.
+  Data fetching             fetchManifest, fetchServerData, fetchChannelData,
+                            fetchNewMessages, applyServerOrder, fetchMyServers,
+                            saveServerOrder
+  Auth                      login, register, logout
+  Text formatting           formatTime, formatText
+  HTML builders             avatarHTML, buildAttachmentsHTML, buildMessageHTML,
+                            toDisplayMessage, DELETE_ICON, VIDEO_ICON
+  Message rendering         renderMessages, rebuildDOM
+  Member list               renderMemberList
+  Server list               renderServerList (with drag-and-drop)
+  Channel sidebar           renderChannelSidebar (with event wiring)
+  Attachment previews       renderAttachmentPreviews, handleFilesSelected
+  Server/channel CRUD       promptCreateCategory, promptCreateChannel,
+                            removeCategory, removeChannel, deleteServer,
+                            leaveServer, deleteMessage
+  Member actions            toggleAddMemberDropdown, addUserToChannel,
+                            kickUserFromChannel
+  Account actions           changeProfilePic, changeServerThumbnail,
+                            changeUsername, changePassword, deleteAccount
+  Navigation                switchServer, switchChannel
+  Polling                   startPolling, stopPolling, startSessionCheck,
+                            stopSessionCheck, sessionHeartbeat, poll
+  Recovery                  recoverFromChannelLoss, recoverFromServerLoss,
+                            resetChatArea
+  Landing pages             renderServerLanding
+  Explore                   openExplore, closeExplore
+  Message sending           sendMessage, loadMoreMessages
+  UI helpers                updateUserUI, updateVisibilityBtn, showLogin,
+                            hideLogin, closeEmojiPicker, initEmojiPicker
+  Init                      DOMContentLoaded handler, initApp
+
+────────────────────────────────────────────────────────────────────────────────
+MODULE-LEVEL STATE
+────────────────────────────────────────────────────────────────────────────────
+
+  session            { username, token: number[32], profilePic? }
+                     Persisted in sessionStorage as JSON.
+                     token is the server's rolling [32]byte auth token,
+                     stored as an array of 32 ints (Go JSON encoding).
+
+  apiQueue           Promise chain — all authenticated POST requests are
+                     serialised through this to prevent token desync.
+                     (Server rotates token on every authenticated response.)
+
+  profilePicCache    Map<username, mediaId|null>
+                     Populated lazily by ensureProfilePics().  Never
+                     invalidated during a session.
+
+  serverThumbnailCache  Map<serverId, mediaId|null>
+                     Updated on server switch and during polling.
+
+  pendingAttachments Array<{id, mimeType, name, objectURL}>
+                     Files the user has selected but not yet sent.
+                     objectURL is a Blob URL for thumbnail preview.
+                     Cleared on send and on channel switch.
+
+  currentServer        string | null   (hex server ID)
+  currentServerName    string | null
+  currentServerOwner   string | null   (username)
+  currentServerPublic  bool
+  currentServerMembers string[]        (all server member usernames)
+  currentCategory      string | null
+  currentChannel       string | null
+  currentChannelMembers string[]       (current channel member usernames)
+
+  lastServerStructure  string | null   JSON of categories; used by poll to
+                       detect structural changes (new channels, membership)
+  lastSeenId         int — highest message ID rendered; -1 = channel empty
+  renderedMessages   Array<{from, content, id, time, attachments[]}>
+                     The flat in-memory list of displayed messages.
+  hasMoreMessages    bool — whether a "Load older" page is available
+  loadingMore        bool — guard against concurrent load-more requests
+  navGeneration      int — incremented on every server/channel switch;
+                     stale async responses are discarded by comparing gen.
+  userServerOrder    string[] — custom server order (persisted server-side)
+
+  collapsedCategories  Set<string> — collapsed category names (UI state)
+
+  pollTimer          setInterval handle (5s)
+  sessionCheckTimer  setInterval handle (5s)
+  exploreOpen        bool
+
+────────────────────────────────────────────────────────────────────────────────
+KEY FUNCTIONS
+────────────────────────────────────────────────────────────────────────────────
+
+SESSION
+  loadSession()          Restore session from sessionStorage on page load.
+  saveSession()          Write session to sessionStorage.
+  clearSession()         Null out and remove from storage.
+
+API CLIENT
+  apiPost(path, body)    Enqueues an authenticated JSON POST through apiQueue.
+                         Always reads the current token at send time, not
+                         at enqueue time.  Updates session.token on response.
+  _apiPost(path, body)   Internal: executes the actual fetch.
+  checkSessionAlive()    Token-free poll of /get/sessionstatus.  Used by the
+                         heartbeat timer.  Also syncs session.profilePic.
+  authBody(extra)        Returns { username, token, ...extra } from session.
+
+MEDIA UPLOAD
+  tokenToHex(token)      Converts [32]byte int array → 64-char hex string
+                         for multipart form auth (upload endpoint requires it).
+  apiUpload(file)        Enqueues a multipart POST /media/upload through
+                         apiQueue (so token stays in sync).
+  handleFilesSelected(files)
+                         Uploads each selected file, appends to
+                         pendingAttachments, calls renderAttachmentPreviews().
+  renderAttachmentPreviews()
+                         Rebuilds the #attachment-preview-strip DOM from
+                         pendingAttachments.  Each tile has a thumbnail (or
+                         a video icon for video) and a remove button.
+  changeProfilePic()     Creates a temporary file input (images only),
+                         uploads the selection, calls /edit/profilepic/{id},
+                         updates session.profilePic and profilePicCache.
+  changeServerThumbnail()
+                         Same flow for server thumbnail via /edit/thumbnail.
+
+PROFILE PICTURE CACHE
+  ensureProfilePics(usernames)
+                         Fetches /get/sessionstatus for every username not
+                         yet in profilePicCache (in parallel).  Called before
+                         any render that needs avatar images.
+
+AUTH
+  login(username, password)    POST /open/session/{user}; saves token.
+  register(username, password) POST /new/user/{name}.
+  logout()                     POST /close/session; clears session + reloads.
+
+DATA FETCHING
+  fetchManifest()              GET all servers.
+  fetchMyServers(manifest)     Filters manifest to servers the user is in.
+  fetchServerData(serverId)    GET categories/members for one server.
+  fetchChannelData(srv,cat,ch,before)
+                               GET member list + paginated history.
+                               before=0 → newest page; before=ID → older page.
+  fetchNewMessages(srv,cat,ch,sinceId)
+                               GET messages with id > sinceId (incremental poll).
+  saveServerOrder(order)       POST /edit/serverorder with custom ordering.
+
+RENDERING
+  formatText(raw)        Minimal markdown: **bold**, *italic*, `code`.
+                         HTML-escapes input first.
+  avatarHTML(name, picId)
+                         Returns {inner, bg} for rendering user avatars.
+  buildAttachmentsHTML(attachments)
+                         Returns HTML for inline images (<img class="message-img">)
+                         and videos (<video class="message-video" controls>).
+  buildMessageHTML(msgs) Renders a list of message objects to HTML strings.
+                         Groups consecutive messages from the same author.
+                         Uses profilePicCache for avatar images.
+  rebuildDOM()           Replaces #messages-container innerHTML, preserves
+                         scroll position if user was already at the bottom.
+  renderMessages(history)   Replaces renderedMessages, calls rebuildDOM().
+  renderMemberList(members) async — calls ensureProfilePics first, then
+                            rebuilds #members-sidebar.
+  renderServerList(servers) Rebuilds #server-icons-container with drag-and-drop
+                            reordering support.
+  renderChannelSidebar(serverData)
+                            Rebuilds #channel-list with categories and
+                            channels; attaches click, add, and delete handlers.
+  renderServerLanding(serverData)
+                            Shows per-server welcome page with server info.
+
+CHANNEL / SERVER CRUD
+  promptCreateCategory()   prompt() → POST /new/category
+  promptCreateChannel(cat) prompt() → POST /new/channel
+  removeCategory(cat)      POST /remove/category
+  removeChannel(cat, ch)   POST /remove/channel
+  deleteServer()           confirm() → POST /remove/server → recoverFromServerLoss
+  leaveServer()            confirm() → POST /leave/server → recoverFromServerLoss
+
+MEMBER ACTIONS
+  toggleAddMemberDropdown()
+                         Shows a dropdown of server members not in the current
+                         channel.  Clicking a name calls addUserToChannel().
+  addUserToChannel(u)    POST /invite/channel; refreshes member list.
+  kickUserFromChannel(u) POST /kick/channel; refreshes member list.
+
+USER ACCOUNT ACTIONS
+  changeUsername()         prompt() → POST /edit/user/{newname}
+  changePassword()         prompt() × 2 → POST /edit/password
+  deleteAccount()          prompt() → POST /remove/user
+  changeProfilePic()       (see Media Upload above)
+  changeServerThumbnail()  (see Media Upload above)
+
+NAVIGATION
+  switchServer(serverId)
+                       Stops poll, resets state, fetches server data,
+                       renders sidebar, shows/hides owner vs non-owner
+                       buttons, auto-selects first channel or shows
+                       server landing page.
+  switchChannel(cat, ch)
+                       Stops poll; clears pendingAttachments; increments
+                       navGeneration; fetches channel data; pre-fetches
+                       profile pics for all members + history senders;
+                       renders messages and member list; starts polling.
+
+POLLING
+  startPolling() / stopPolling()   setInterval(poll, 5000)
+  startSessionCheck() / stopSessionCheck()   setInterval(sessionHeartbeat, 5000)
+  sessionHeartbeat()   Calls checkSessionAlive(); force-logout if dead.
+  poll()               Fetches server data to sync name, thumbnail, and
+                       channel structure.  Updates currentServerMembers.
+                       If lastSeenId < 0: full channel fetch.
+                       Otherwise: incremental GET /get/chat/…/{lastSeenId},
+                       then re-fetches channel data to sync member list.
+                       Pre-fetches profile pics for new senders before render.
+
+RECOVERY
+  recoverFromChannelLoss()  Channel gone or access revoked; re-fetches server
+                            data and selects first available channel.
+  recoverFromServerLoss()   Server gone; re-fetches manifest and selects
+                            first accessible server.
+  resetChatArea(reason)     Clears chat header and messages area.
+
+MESSAGE SENDING
+  sendMessage(text)    Collects pendingAttachments IDs, clears pending,
+                       POSTs /new/message with { content, attachments: [...] },
+                       then triggers a poll to display the result immediately.
+  loadMoreMessages()   Fetches the next older page using the oldest rendered
+                       message ID as the `before` cursor.  Pre-fetches profile
+                       pics, prepends older messages, restores scroll position.
+
+UI HELPERS
+  updateUserUI()       Updates #current-username and #user-avatar.
+                       Shows <img> avatar if session.profilePic is set.
+  updateVisibilityBtn()  Toggles "Make Private"/"Make Public" text on the
+                       server menu button.
+  initEmojiPicker()    Populates #emoji-grid with buttons from EMOJIS array.
+  showLogin() / hideLogin()   Toggle .login-overlay.open
+  closeEmojiPicker()   Removes .open from #emoji-picker.
+
+INIT
+  DOMContentLoaded handler
+    — wires all static button event listeners (login, register, message
+      input, attach button, emoji, delete message, member invite/kick,
+      explore, toggle members, account menu, server menu, delete/leave
+      server, thumbnail, visibility)
+    — if session exists: calls initApp(); else: showLogin()
+
+  initApp()
+    1. Validates session via POST /get/manifest (also rotates token once)
+    2. updateUserUI() + seeds profilePicCache for self
+    3. startSessionCheck()
+    4. fetchMyServers() → renderServerList()
+    5. switchServer(first server) or shows "No servers" message
+
+────────────────────────────────────────────────────────────────────────────────
+DATA FLOW SUMMARY
+────────────────────────────────────────────────────────────────────────────────
+
+  User navigates to channel
+    switchChannel()
+      → fetchChannelData()           (POST /get/channel/…)
+      → ensureProfilePics()          (parallel /get/sessionstatus for each user)
+      → renderMessages()             (fills renderedMessages, calls rebuildDOM)
+      → renderMemberList()           (fills sidebar)
+      → startPolling()
+
+  Poll fires (every 5s)
+    poll()
+      → fetchServerData()            (syncs name, thumbnail, structure, members)
+      → renderChannelSidebar()       (if structure changed — e.g. new channels)
+      → fetchNewMessages()           (POST /get/chat/…/{lastSeenId})
+      → ensureProfilePics(new senders)
+      → push to renderedMessages, rebuildDOM()
+      → fetchChannelData()           (syncs channel member list)
+      → renderMemberList()           (if members changed)
+
+  User sends a message
+    sendMessage()
+      → apiPost(/new/message)        (includes attachments: [id, …])
+      → poll()                       (immediately refresh)
+
+  User attaches a file
+    attach-btn click → file picker
+    handleFilesSelected()
+      → apiUpload(file)              (multipart POST /media/upload)
+      → push to pendingAttachments
+      → renderAttachmentPreviews()
+
+  User sets profile picture
+    changeProfilePic()
+      → apiUpload(image)
+      → apiPost(/edit/profilepic/{id})
+      → session.profilePic = id
+      → profilePicCache.set(username, id)
+      → updateUserUI()
+
+  User joins a server (explore page)
+    → POST /join/server/{server}     (auto-adds to all channels)
+    → switchServer()
+
+  User leaves a server
+    leaveServer()
+      → POST /leave/server/{server}  (removes from all channels)
+      → recoverFromServerLoss()
+
+  Owner adds user to channel
+    toggleAddMemberDropdown()
+      → shows dropdown of non-member server members
+      → addUserToChannel()
+      → POST /invite/channel/…
+      → fetchChannelData() → renderMemberList()
+
+  Session heartbeat (every 5s)
+    checkSessionAlive()
+      → POST /get/sessionstatus      (token-free)
+      → syncs session.profilePic / profilePicCache
+      → force-logout if inactive
+
+────────────────────────────────────────────────────────────────────────────────
+API ENDPOINTS USED BY THE CLIENT
+────────────────────────────────────────────────────────────────────────────────
+
+AUTH / SESSION
+  POST /new/user/{name}              Register
+  POST /open/session/{user}          Login → returns token
+  POST /close/session                Logout
+  POST /get/sessionstatus            Heartbeat (token-free); returns active+profilePic
+
+SERVERS
+  POST /get/manifest                 List all servers (id, name, owner, thumbnail, public)
+  POST /get/server/{server}          Server detail (owner, members, categories, public)
+  POST /new/server/{name}
+  POST /remove/server/{server}
+  POST /edit/server/{server}/{newname}
+  POST /edit/thumbnail/{server}/{mediaid}
+  POST /edit/visibility/{server}     Toggle public/private  { public: bool }
+  POST /edit/serverorder             Save custom server ordering
+  POST /join/server/{server}         Self-join public server (auto-adds to all channels)
+  POST /leave/server/{server}        Leave server (removes from all channels; owner blocked)
+
+CATEGORIES
+  POST /new/category/{server}/{name}
+  POST /remove/category/{server}/{category}
+  POST /edit/category/{server}/{category}/{newname}
+
+CHANNELS
+  POST /new/channel/{server}/{category}/{name}
+  POST /remove/channel/{server}/{category}/{channel}
+  POST /edit/channel/{server}/{category}/{channel}/{newname}
+  POST /get/channel/{server}/{category}/{channel}   Paginated history + members
+  POST /get/chat/{server}/{category}/{channel}/{id} Incremental poll
+
+MESSAGES
+  POST /new/message/{server}/{category}/{channel}
+  POST /remove/message/{server}/{category}/{channel}/{id}
+  POST /edit/message/{server}/{category}/{channel}/{id}
+
+MEMBERS
+  POST /invite/server/{user}/{server}                      Owner adds user to server
+  POST /invite/channel/{user}/{server}/{category}/{channel} Owner adds user to channel
+  POST /kick/server/{user}/{server}                        Owner kicks from server
+  POST /kick/channel/{user}/{server}/{category}/{channel}  Owner kicks from channel
+
+USER
+  POST /edit/user/{newname}
+  POST /edit/password
+  POST /edit/profilepic/{mediaid}
+  POST /remove/user
+
+MEDIA
+  POST /media/upload                 Multipart; auth via form fields (hex token)
+  GET  /media/{id}                   Serve file (no auth)

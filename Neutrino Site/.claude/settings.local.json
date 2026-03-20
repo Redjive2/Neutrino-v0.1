@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go mod init neutrino-server)",
+      "Bash(go build -o neutrino-server .)",
+      "Bash(node --check \"/Users/redjive2/Dev/Test Site/app.js\")"
+    ]
+  }
+}
