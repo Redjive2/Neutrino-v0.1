@@ -27,6 +27,7 @@ type User struct {
 	Name        string
 	Messages    []*Message
 	Token       [32]byte
+	PrevToken   [32]byte
 	LastRequest time.Time
 	Active      bool
 	Password    string

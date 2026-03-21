@@ -52,10 +52,14 @@ func ValidateUser(user *User, w http.ResponseWriter, token [32]byte) bool {
 		return false
 	}
 
+	empty := [32]byte{}
+
 	if token != user.Token {
-		w.WriteHeader(http.StatusUnauthorized)
-		Tokenless(w, "(ERROR) Invalid token provided.", nil)
-		return false
+		if token == empty || token != user.PrevToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			Tokenless(w, "(ERROR) Invalid token provided.", nil)
+			return false
+		}
 	}
 
 	if time.Since(user.LastRequest) > time.Duration(10)*time.Minute {

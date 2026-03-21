@@ -28,7 +28,7 @@ func resolveDir() (serverDir, repoRoot string) {
 	}
 
 	base := filepath.Dir(exe)
-	return filepath.Join(base, "..", "Neutrino Server"), filepath.Dir(base)
+	return filepath.Join(base, "..", "Server"), filepath.Dir(base)
 }
 
 func build(dir string) error {

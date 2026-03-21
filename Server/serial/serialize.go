@@ -16,6 +16,7 @@ type UserTarget struct {
 	Name        string   `json:"name"`
 	Password    string   `json:"password"`
 	Token       [32]byte `json:"token"`
+	PrevToken   [32]byte `json:"prevToken"`
 	ProfilePic  string   `json:"profilePic,omitempty"`
 	ServerOrder []string `json:"serverOrder,omitempty"`
 }
@@ -132,6 +133,7 @@ func GetUserTargets() []UserTarget {
 			Name:        user.Name,
 			Password:    user.Password,
 			Token:       user.Token,
+			PrevToken:   user.PrevToken,
 			ProfilePic:  user.ProfilePic,
 			ServerOrder: user.ServerOrder,
 		}
@@ -268,6 +270,7 @@ func Deserialize(sourceFile *os.File) error {
 		u := &core.User{
 			Name:        ut.Name,
 			Token:       ut.Token,
+			PrevToken:   ut.PrevToken,
 			LastRequest: lastRequest,
 			Active:      ut.Active,
 			Password:    ut.Password,

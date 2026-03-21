@@ -119,11 +119,11 @@ func main() {
 		}()
 	})
 
-	mux.HandleFunc("/", FileServer("../Neutrino Site/Neutrino.htm"))
-	mux.HandleFunc("/Neutrino.htm", FileServer("../Neutrino Site/Neutrino.htm"))
-	mux.HandleFunc("/style.css", FileServer("../Neutrino Site/style.css"))
-	mux.HandleFunc("/app.js", FileServer("../Neutrino Site/app.js"))
-	mux.HandleFunc("/favicon.ico", FileServer("../Neutrino Site/favicon.ico"))
+	mux.HandleFunc("/", FileServer("../Site/Neutrino.htm"))
+	mux.HandleFunc("/Neutrino.htm", FileServer("../Site/Neutrino.htm"))
+	mux.HandleFunc("/style.css", FileServer("../Site/style.css"))
+	mux.HandleFunc("/app.js", FileServer("../Site/app.js"))
+	mux.HandleFunc("/favicon.ico", FileServer("../Site/favicon.ico"))
 
 	ln, err := listen(":8080")
 	if err != nil {

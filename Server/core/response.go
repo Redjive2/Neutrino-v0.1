@@ -35,6 +35,7 @@ func Tokenless(w http.ResponseWriter, message string, data any) {
 func WithToken(w http.ResponseWriter, user *User, message string, data any) {
 	token := NewToken()
 
+	user.PrevToken = user.Token
 	user.Token = token
 
 	bytes, err := json.Marshal(ServerResponse{
