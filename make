@@ -18,10 +18,14 @@ cd Server && go build -o server && cd ..
 cd Supervisor && go build -o supervisor && cd ..
 
 if [[ $1 == "serve" ]]; then
-    ./Server/server
+    cd Server
+    go build -o server
+    ./server
 fi
 
 if [[ $1 == "supervise" ]]; then
-    ./Supervisor/supervisor
+    cd Supervisor
+    go build -o supervisor
+    ./supervisor
 fi
     
