@@ -414,6 +414,11 @@ html, body {
   color: var(--brand-color);
 }
 
+.channel.unread:not(.active) .channel-name {
+  border-bottom: 2px solid var(--text-muted);
+  padding-bottom: 1px;
+}
+
 .channel-hash {
   font-size: 16px;
   font-family: var(--font-mono);
@@ -800,6 +805,18 @@ html, body {
 .msg-action-btn:hover {
   background: var(--bg-modifier-hover);
   color: var(--brand-color);
+}
+
+.edit-input {
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--brand-color);
+  border-radius: 4px;
+  color: var(--text-normal);
+  font-size: 14px;
+  padding: 4px 8px;
+  outline: none;
+  font-family: inherit;
 }
 
 /* ===== Message Input ===== */

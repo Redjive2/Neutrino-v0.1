@@ -1,7 +1,25 @@
 #!/bin/bash
 
+if [[ $1 == "" ]]; then
+    echo "Use './make help' to see options."
+    exit 0
+fi
+
+if [[ $1 == "help" ]]; then
+    echo " [----------------------------------------------------------------------------------------------------]"
+    echo " | ./make: Neutrino build helper                                                                      |"
+    echo " | -----------------------------                                                                      |"
+    echo " | -> clean            : Remove all build artifacts.                                                  |"  
+    echo " | -> commit           : Add, commit, and push Neutrino to Github, then update the remote supervisor. |"
+    echo " | -> build            : Build the server and supervisor for the current environment.                 |"
+    echo " | -> serve     <port> : Build and run just the server for the current env. on the port given.        |"
+    echo " | -> supervise <port> : Build and run the supervisor for the current env. on the port given.         |"
+    echo " [----------------------------------------------------------------------------------------------------]"
+fi
+
 if [[ $1 == "clean" ]]; then
     rm ./Server/server
+    rm ./Server/server_tmp
     rm ./Supervisor/supervisor
     exit 0
 fi
@@ -14,18 +32,25 @@ if [[ $1 == "commit" ]]; then
   exit 0
 fi
 
-cd Server && go build -o server && cd ..
-cd Supervisor && go build -o supervisor && cd ..
+if [[ $1 == "build" ]]; then
+    cd Server && go build -o server && cd ..
+    cd Supervisor && go build -o supervisor && cd ..
+    exit 0
+fi
 
 if [[ $1 == "serve" ]]; then
     cd Server
     go build -o server
-    ./server
+    ./server $2
+    exit 0
 fi
 
 if [[ $1 == "supervise" ]]; then
     cd Supervisor
     go build -o supervisor
-    ./supervisor
+    ./supervisor $2
+    exit 0
 fi
+
+echo "'$1' is not a valid subcommand. Use './make help' for a list of subcommands."
     

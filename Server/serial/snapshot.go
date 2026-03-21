@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+// lockedSaveTo acquires the global mutex before saving.
+func lockedSaveTo(path string) error {
+	core.Mu.Lock()
+	defer core.Mu.Unlock()
+	return saveTo(path)
+}
+
 func log(msg string) {
 	fmt.Println("[" + fmt.Sprint(time.Now()) + "]  " + msg)
 }
@@ -21,6 +28,12 @@ func saveTo(path string) error {
 	}
 
 	if err := Serialize(f); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+
+	if err := f.Sync(); err != nil {
 		f.Close()
 		os.Remove(tmp)
 		return err
@@ -79,15 +92,14 @@ func StartAutoSnapshot(primaryPath, backupPath string) {
 				}
 				core.Dirty = false
 
-				if err := saveTo(primaryPath); err != nil {
+				if err := lockedSaveTo(primaryPath); err != nil {
 					log("Snapshot FAILED: " + err.Error())
 				} else {
 					log("Snapshot saved to " + primaryPath)
 				}
 
 			case <-backupTicker.C:
-				// Hourly backup always saves current state regardless of dirty flag
-				if err := saveTo(backupPath); err != nil {
+				if err := lockedSaveTo(backupPath); err != nil {
 					log("Backup FAILED: " + err.Error())
 				} else {
 					log("Backup saved to " + backupPath)

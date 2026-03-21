@@ -18,11 +18,15 @@ const (
 	backupFile   = "data/backup.json"
 )
 
-var manifest = map[string]int{}
-
 var updating atomic.Bool
 
 func main() {
+	if len(os.Args) != 2 {
+		panic("'1' argument expected (var port string); got '" + fmt.Sprint(len(os.Args)) + "'.")
+	}
+
+	port := os.Args[1]
+
 	fmt.Println("[" + fmt.Sprint(time.Now()) + "]  Initializing server.")
 
 	if err := media.EnsureDir(); err != nil {
@@ -81,21 +85,21 @@ func main() {
 
 	// Media endpoints
 	mux.HandleFunc("POST /media/upload", mutating(actions.UploadMedia))
-	mux.HandleFunc("GET /media/{id}", actions.ServeMedia)
+	mux.HandleFunc("GET /media/{id}", locked(actions.ServeMedia))
 
 	// Read-only endpoints
-	mux.HandleFunc("POST /get/manifest", actions.GetManifest)
-	mux.HandleFunc("POST /get/server/{server}", actions.GetServerData)
-	mux.HandleFunc("POST /get/channel/{server}/{category}/{channel}", actions.GetChannelData)
-	mux.HandleFunc("POST /get/chat/{server}/{category}/{channel}/{id}", actions.GetChatsSince)
-	mux.HandleFunc("POST /get/sessionstatus", actions.GetSessionStatus)
+	mux.HandleFunc("POST /get/manifest", locked(actions.GetManifest))
+	mux.HandleFunc("POST /get/server/{server}", locked(actions.GetServerData))
+	mux.HandleFunc("POST /get/channel/{server}/{category}/{channel}", locked(actions.GetChannelData))
+	mux.HandleFunc("POST /get/chat/{server}/{category}/{channel}/{id}", locked(actions.GetChatsSince))
+	mux.HandleFunc("POST /get/sessionstatus", locked(actions.GetSessionStatus))
 
 	// Supervisor endpoint
 	mux.HandleFunc("POST /supervisor/doupdate", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Password string `json:"password"`
 		}
-		
+
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Password != "c12x192w" {
 			w.WriteHeader(http.StatusForbidden)
 			return
@@ -114,7 +118,9 @@ func main() {
 
 		go func() {
 			time.Sleep(500 * time.Millisecond)
+			core.Mu.Lock()
 			serial.SnapshotAndTrim(snapshotFile)
+			core.Mu.Unlock()
 			os.Exit(2)
 		}()
 	})
@@ -125,25 +131,52 @@ func main() {
 	mux.HandleFunc("/app.js", FileServer("../Site/app.js"))
 	mux.HandleFunc("/favicon.ico", FileServer("../Site/favicon.ico"))
 
-	ln, err := listen(":8080")
+	ln, err := listen(":" + port)
 	if err != nil {
-		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  FATAL: could not listen on :8080: " + err.Error())
+		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  FATAL: could not listen on :"+port+": " + err.Error())
 		os.Exit(1)
 	}
 
 	http.Serve(ln, mux)
 }
 
-// mutating wraps a handler and marks data as dirty after it runs.
-// After 1024 mutations, it triggers an immediate snapshot and trims
-// in-memory channel histories to the most recent 64 messages.
+// statusWriter captures the response status code so mutating() can check
+// whether the handler succeeded before marking data dirty.
+type statusWriter struct {
+	http.ResponseWriter
+	code int
+}
+
+func (sw *statusWriter) WriteHeader(code int) {
+	sw.code = code
+	sw.ResponseWriter.WriteHeader(code)
+}
+
+// locked wraps a handler with the global mutex.
+func locked(handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		core.Mu.Lock()
+		defer core.Mu.Unlock()
+		handler(w, r)
+	}
+}
+
+// mutating wraps a handler, acquires the mutex, and marks data as dirty only
+// if the handler returned a 2xx status. After 1024 mutations, it triggers an
+// immediate snapshot and trims in-memory channel histories.
 func mutating(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		handler(w, r)
-		core.MarkDirty()
+		core.Mu.Lock()
+		defer core.Mu.Unlock()
 
-		if core.MutationCount >= 1024 {
-			serial.SnapshotAndTrim(snapshotFile)
+		sw := &statusWriter{ResponseWriter: w, code: 200}
+		handler(sw, r)
+
+		if sw.code >= 200 && sw.code < 300 {
+			core.MarkDirty()
+			if core.MutationCount >= 1024 {
+				serial.SnapshotAndTrim(snapshotFile)
+			}
 		}
 	}
 }

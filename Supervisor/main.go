@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 )
 
@@ -16,8 +17,17 @@ const (
 	maxDelay       = 60 * time.Second
 )
 
+var port string
+
 func log(msg string) {
 	fmt.Println("[" + time.Now().Format(time.DateTime) + "]  " + msg)
+}
+
+func binName(base string) string {
+	if runtime.GOOS == "windows" {
+		return base + ".exe"
+	}
+	return base
 }
 
 func resolveDir() (serverDir, repoRoot string) {
@@ -34,7 +44,7 @@ func resolveDir() (serverDir, repoRoot string) {
 func build(dir string) error {
 	log("Building server...")
 
-	tmp := "neutrino_new.exe"
+	tmp := binName("server_tmp")
 	cmd := exec.Command("go", "build", "-o", tmp)
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
@@ -45,18 +55,21 @@ func build(dir string) error {
 		return err
 	}
 
-	target := "neutrino.exe"
+	target := binName("server")
 	old := filepath.Join(dir, target)
 	built := filepath.Join(dir, tmp)
 
-	// On Windows the old binary may still be locked briefly after exit.
-	// Rename it out of the way, then put the new one in place.
 	bak := old + ".bak"
 	os.Remove(bak)
-	os.Rename(old, bak)
+
+	if err := os.Rename(old, bak); err != nil {
+		// Old binary may not exist on first build.
+		if !os.IsNotExist(err) {
+			log("WARNING: could not rename old binary: " + err.Error())
+		}
+	}
 
 	if err := os.Rename(built, old); err != nil {
-		// Restore backup if swap failed.
 		os.Rename(bak, old)
 		return fmt.Errorf("swap failed: %w", err)
 	}
@@ -75,14 +88,14 @@ func gitPull(dir string) error {
 }
 
 func run(dir string) int {
-	binary := filepath.Join(dir, "neutrino.exe")
-	cmd := exec.Command(binary)
+	binary := filepath.Join(dir, binName("server"))
+	cmd := exec.Command(binary, port)
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
 	if err := cmd.Start(); err != nil {
 		log("ERROR: could not start server: " + err.Error())
@@ -90,20 +103,23 @@ func run(dir string) int {
 		return 1
 	}
 
-	// On Windows, Ctrl+C is automatically sent to all processes in the console
-	// group, so no forwarding is needed. On Unix, we forward the signal.
+	done := make(chan struct{})
+
 	if runtime.GOOS != "windows" {
 		go func() {
-			sig, ok := <-sigCh
-			if ok && cmd.Process != nil {
-				cmd.Process.Signal(sig)
+			select {
+			case sig, ok := <-sigCh:
+				if ok && cmd.Process != nil {
+					cmd.Process.Signal(sig)
+				}
+			case <-done:
 			}
 		}()
 	}
 
 	err := cmd.Wait()
 	signal.Stop(sigCh)
-	close(sigCh)
+	close(done)
 
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -117,6 +133,11 @@ func run(dir string) int {
 }
 
 func main() {
+	if len(os.Args) != 2 {
+		panic("'1' argument expected (var port string); got '" + fmt.Sprint(len(os.Args)) + "'.")
+	}
+
+	port = os.Args[1]
 	dir, root := resolveDir()
 
 	log("Supervisor started.")
@@ -132,6 +153,7 @@ func main() {
 
 	for {
 		log("Starting server...")
+		start := time.Now()
 		code := run(dir)
 
 		switch code {
@@ -145,6 +167,8 @@ func main() {
 
 			if err := gitPull(root); err != nil {
 				log("WARNING: git pull failed: " + err.Error())
+				log("Skipping rebuild, restarting existing binary...")
+				continue
 			}
 
 			if err := build(dir); err != nil {
@@ -153,6 +177,11 @@ func main() {
 			}
 
 		default:
+			// Reset backoff if the server ran for a while before crashing.
+			if time.Since(start) > maxDelay {
+				delay = minDelay
+			}
+
 			log(fmt.Sprintf("Server crashed (exit code %d). Restarting in %s...", code, delay))
 			time.Sleep(delay)
 

@@ -2,6 +2,7 @@ package core
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"net/http"
 	"time"
 
@@ -53,16 +54,17 @@ func ValidateUser(user *User, w http.ResponseWriter, token [32]byte) bool {
 	}
 
 	empty := [32]byte{}
+	matchesCurrent := subtle.ConstantTimeCompare(token[:], user.Token[:]) == 1
+	matchesPrev    := subtle.ConstantTimeCompare(token[:], user.PrevToken[:]) == 1
+	isEmpty        := subtle.ConstantTimeCompare(token[:], empty[:]) == 1
 
-	if token != user.Token {
-		if token == empty || token != user.PrevToken {
-			w.WriteHeader(http.StatusUnauthorized)
-			Tokenless(w, "(ERROR) Invalid token provided.", nil)
-			return false
-		}
+	if !matchesCurrent && (isEmpty || !matchesPrev) {
+		w.WriteHeader(http.StatusUnauthorized)
+		Tokenless(w, "(ERROR) Invalid token provided.", nil)
+		return false
 	}
 
-	if time.Since(user.LastRequest) > time.Duration(10)*time.Minute {
+	if time.Since(user.LastRequest) > 10*time.Minute {
 		w.WriteHeader(http.StatusUnauthorized)
 		Tokenless(w, "(ERROR) Session timed out for user '"+user.Name+"'.", nil)
 

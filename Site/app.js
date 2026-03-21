@@ -6,6 +6,10 @@ const EMOJIS = [
 
 function enc(s) { return encodeURIComponent(s); }
 
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function tokenToHex(token) {
   return token.map(b => b.toString(16).padStart(2, '0')).join('');
 }
@@ -195,6 +199,7 @@ let pendingAttachments = [];
 let userServerOrder    = [];
 
 const collapsedCategories = new Set();
+const lastReadIds         = new Map();
 
 let pollTimer         = null;
 let sessionCheckTimer = null;
@@ -322,12 +327,14 @@ function formatText(raw) {
 
 const DELETE_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>';
 
+const EDIT_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+
 const VIDEO_ICON = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>';
 
 function avatarHTML(name, picId) {
   const inner = picId
-    ? `<img src="/media/${picId}" alt="${name}">`
-    : name[0].toUpperCase();
+    ? `<img src="/media/${picId}" alt="${esc(name)}">`
+    : esc(name[0]).toUpperCase();
   const bg = picId ? 'transparent' : 'var(--brand-color)';
   return { inner, bg };
 }
@@ -354,23 +361,25 @@ function buildMessageHTML(msgs) {
     const isGroupStart = !prev || prev.from !== msg.from;
     const { inner, bg } = avatarHTML(msg.from, profilePicCache.get(msg.from));
     const canDelete = session && (msg.from === session.username || currentServerOwner === session.username);
+    const canEdit   = session && msg.from === session.username;
 
     return `
-      <div class="message ${isGroupStart ? 'message-group-start' : ''}">
+      <div class="message ${isGroupStart ? 'message-group-start' : ''}" data-msg-id="${msg.id}">
         <div class="message-avatar ${isGroupStart ? '' : 'hidden'}" style="background:${bg}">
           ${inner}
         </div>
         <div class="message-content">
           ${isGroupStart ? `
             <div class="message-header">
-              <span class="message-author">${msg.from}</span>
+              <span class="message-author">${esc(msg.from)}</span>
               <span class="message-timestamp">Today at ${msg.time}</span>
             </div>` : ''}
-          <div class="message-text">${formatText(msg.content)}</div>
+          <div class="message-text" data-msg-id="${msg.id}">${formatText(msg.content)}</div>
           ${buildAttachmentsHTML(msg.attachments)}
         </div>
-        ${canDelete ? `<div class="message-actions">
-          <button class="msg-action-btn msg-delete-btn" data-msg-id="${msg.id}" title="Delete message">${DELETE_ICON}</button>
+        ${canDelete || canEdit ? `<div class="message-actions">
+          ${canEdit ? `<button class="msg-action-btn msg-edit-btn" data-msg-id="${msg.id}" title="Edit message">${EDIT_ICON}</button>` : ''}
+          ${canDelete ? `<button class="msg-action-btn msg-delete-btn" data-msg-id="${msg.id}" title="Delete message">${DELETE_ICON}</button>` : ''}
         </div>` : ''}
       </div>`;
   }).join('');
@@ -400,8 +409,8 @@ function rebuildDOM() {
     top = `
       <div class="welcome-message">
         <div class="welcome-icon">#</div>
-        <h1>Welcome to #${currentChannel}</h1>
-        <p>This is the start of the #${currentChannel} channel.</p>
+        <h1>Welcome to #${esc(currentChannel)}</h1>
+        <p>This is the start of the #${esc(currentChannel)} channel.</p>
       </div>`;
   }
 
@@ -425,7 +434,7 @@ async function renderMemberList(members) {
 
   let html = `
     <div class="member-header-row">
-      <div class="member-category"><span>MEMBERS — ${members.length}</span></div>
+      <div class="member-category"><span>CHANNEL MEMBERS — ${members.length}</span></div>
       ${isOwner ? `<button class="invite-user-btn" title="Invite user to channel">+</button>` : ''}
     </div>`;
 
@@ -437,8 +446,8 @@ async function renderMemberList(members) {
     html += `
       <div class="member">
         <div class="member-avatar" style="background:${bg}">${inner}</div>
-        <div class="member-info"><span class="member-name">${name}${ownerBadge}</span></div>
-        ${isOwner && !isSelf ? `<button class="kick-btn" data-username="${name}" title="Kick from channel">&#215;</button>` : ''}
+        <div class="member-info"><span class="member-name">${esc(name)}${ownerBadge}</span></div>
+        ${isOwner && !isSelf ? `<button class="kick-btn" data-username="${esc(name)}" title="Kick from channel">&#215;</button>` : ''}
       </div>`;
   });
 
@@ -469,7 +478,7 @@ function renderServerList(servers) {
 
     const thumb = serverThumbnailCache.get(s.id);
     if (thumb) {
-      el.innerHTML = `<img src="/media/${thumb}" alt="${s.name}">`;
+      el.innerHTML = `<img src="/media/${thumb}" alt="${esc(s.name)}">`;
     } else {
       el.textContent = s.name[0].toUpperCase();
     }
@@ -526,24 +535,27 @@ function renderChannelSidebar(serverData) {
       const collapsed = collapsedCategories.has(cat.name);
 
       html += `
-        <div class="channel-category${collapsed ? ' collapsed' : ''}" data-category="${cat.name}">
+        <div class="channel-category${collapsed ? ' collapsed' : ''}" data-category="${esc(cat.name)}">
           <span class="category-toggle">&#9662;</span>
-          <span class="category-name">${cat.name.toUpperCase()}</span>
+          <span class="category-name">${esc(cat.name.toUpperCase())}</span>
           ${isOwner ? `
-            <button class="add-channel-btn" data-category="${cat.name}" title="Add channel">+</button>
-            <button class="remove-cat-btn" data-category="${cat.name}" title="Delete category">&#215;</button>
+            <button class="add-channel-btn" data-category="${esc(cat.name)}" title="Add channel">+</button>
+            <button class="remove-cat-btn" data-category="${esc(cat.name)}" title="Delete category">&#215;</button>
           ` : ''}
         </div>
-        <div class="category-channels${collapsed ? ' collapsed' : ''}" data-category="${cat.name}">`;
+        <div class="category-channels${collapsed ? ' collapsed' : ''}" data-category="${esc(cat.name)}">`;
 
       (cat.channels || []).forEach(ch => {
-        const active = ch === currentChannel && cat.name === currentCategory ? ' active' : '';
+        const name   = ch.name;
+        const active = name === currentChannel && cat.name === currentCategory ? ' active' : '';
+        const key    = `${currentServer}/${cat.name}/${name}`;
+        const unread = lastReadIds.has(key) && ch.latestMsgId > lastReadIds.get(key) ? ' unread' : '';
 
         html += `
-          <div class="channel${active}" data-channel="${ch}" data-category="${cat.name}">
+          <div class="channel${active}${unread}" data-channel="${esc(name)}" data-category="${esc(cat.name)}">
             <span class="channel-hash">#</span>
-            <span class="channel-name">${ch}</span>
-            ${isOwner ? `<button class="remove-channel-btn" data-channel="${ch}" data-category="${cat.name}" title="Delete channel">&#215;</button>` : ''}
+            <span class="channel-name">${esc(name)}</span>
+            ${isOwner ? `<button class="remove-channel-btn" data-channel="${esc(name)}" data-category="${esc(cat.name)}" title="Delete channel">&#215;</button>` : ''}
           </div>`;
       });
 
@@ -644,7 +656,7 @@ function renderAttachmentPreviews() {
     return `
       <div class="attachment-preview-item">
         ${thumb}
-        <span class="attachment-preview-name" title="${a.name}">${a.name}</span>
+        <span class="attachment-preview-name" title="${esc(a.name)}">${esc(a.name)}</span>
         <button class="attachment-preview-remove" data-idx="${i}" title="Remove">&#215;</button>
       </div>`;
   }).join('');
@@ -759,6 +771,55 @@ async function deleteMessage(msgId) {
   rebuildDOM();
 }
 
+function startEditMessage(msgId) {
+  const msg = renderedMessages.find(m => m.id === msgId);
+  if (!msg) return;
+
+  const textEl = document.querySelector(`.message-text[data-msg-id="${msgId}"]`);
+  if (!textEl || textEl.querySelector('.edit-input')) return;
+
+  const original = msg.content;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'edit-input';
+  input.value = original;
+  input.maxLength = 2048;
+
+  textEl.textContent = '';
+  textEl.appendChild(input);
+  input.focus();
+  input.select();
+
+  const finish = async (save) => {
+    input.removeEventListener('keydown', onKey);
+    input.removeEventListener('blur', onBlur);
+
+    if (save && input.value.trim() && input.value !== original) {
+      const { ok } = await apiPost(
+        `/edit/message/${enc(currentServer)}/${enc(currentCategory)}/${enc(currentChannel)}/${msgId}`,
+        authBody({ content: input.value.trim() })
+      );
+
+      if (ok) {
+        msg.content = input.value.trim();
+      }
+    }
+
+    textEl.innerHTML = formatText(msg.content);
+  };
+
+  const onKey = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  };
+
+  const onBlur = () => finish(true);
+
+  input.addEventListener('keydown', onKey);
+  input.addEventListener('blur', onBlur);
+}
+
 
 // --- Member actions ---
 
@@ -780,7 +841,7 @@ async function toggleAddMemberDropdown() {
       const { inner, bg } = avatarHTML(name, profilePicCache.get(name));
       const item = document.createElement('div');
       item.className = 'add-member-item';
-      item.innerHTML = `<div class="member-avatar" style="background:${bg}">${inner}</div><span>${name}</span>`;
+      item.innerHTML = `<div class="member-avatar" style="background:${bg}">${inner}</div><span>${esc(name)}</span>`;
       item.addEventListener('click', () => addUserToChannel(name));
       dropdown.appendChild(item);
     });
@@ -817,6 +878,74 @@ async function addUserToChannel(username) {
     }
   } else {
     alert('Could not add user to channel.');
+  }
+}
+
+async function inviteToServer() {
+  if (!currentServer) return;
+
+  const username = prompt('Username to invite:');
+  if (!username || !username.trim()) return;
+
+  const { ok, data } = await apiPost(
+    `/invite/server/${enc(username.trim())}/${enc(currentServer)}`,
+    authBody()
+  );
+
+  if (ok) {
+    const sdata = await fetchServerData(currentServer);
+    if (sdata) {
+      currentServerMembers = sdata.members || [];
+      if (currentChannel) {
+        const cdata = await fetchChannelData(currentServer, currentCategory, currentChannel);
+        if (cdata) {
+          currentChannelMembers = cdata.members || [];
+          await renderMemberList(currentChannelMembers);
+        }
+      }
+    }
+  } else {
+    const msg = (data && data.message) || 'Could not invite user.';
+    alert(msg);
+  }
+}
+
+async function kickFromServer() {
+  if (!currentServer) return;
+
+  const kickable = currentServerMembers.filter(m => m !== session.username && m !== currentServerOwner);
+  if (kickable.length === 0) { alert('No members to kick.'); return; }
+
+  const username = prompt('Username to kick:\n\nMembers: ' + kickable.join(', '));
+  if (!username || !username.trim()) return;
+
+  if (!kickable.includes(username.trim())) {
+    alert('User is not a kickable member of this server.');
+    return;
+  }
+
+  if (!confirm(`Kick ${username.trim()} from this server? They will be removed from all channels.`)) return;
+
+  const { ok, data } = await apiPost(
+    `/kick/server/${enc(username.trim())}/${enc(currentServer)}`,
+    authBody()
+  );
+
+  if (ok) {
+    const sdata = await fetchServerData(currentServer);
+    if (sdata) {
+      currentServerMembers = sdata.members || [];
+      if (currentChannel) {
+        const cdata = await fetchChannelData(currentServer, currentCategory, currentChannel);
+        if (cdata) {
+          currentChannelMembers = cdata.members || [];
+          await renderMemberList(currentChannelMembers);
+        }
+      }
+    }
+  } else {
+    const msg = (data && data.message) || 'Could not kick user.';
+    alert(msg);
   }
 }
 
@@ -885,7 +1014,7 @@ async function changeServerThumbnail() {
 
     const icon = document.querySelector(`.server-icon[data-server="${currentServer}"]`);
     if (icon) {
-      icon.innerHTML = `<img src="/media/${id}" alt="${currentServerName || ''}">`;
+      icon.innerHTML = `<img src="/media/${id}" alt="${esc(currentServerName || '')}">`;
     }
   };
 
@@ -1013,7 +1142,19 @@ async function switchServer(serverId) {
   currentServerOwner   = serverData.owner;
   currentServerPublic  = !!serverData.public;
   currentServerMembers = serverData.members || [];
-  lastServerStructure  = JSON.stringify(serverData.categories || []);
+  lastServerStructure  = JSON.stringify(
+    (serverData.categories || []).map(cat => ({ name: cat.name, channels: (cat.channels || []).map(ch => ch.name) }))
+  );
+
+  // Seed unread tracking: mark all channels as read on first visit
+  for (const cat of serverData.categories || []) {
+    for (const ch of cat.channels || []) {
+      const key = `${serverId}/${cat.name}/${ch.name}`;
+      if (!lastReadIds.has(key)) {
+        lastReadIds.set(key, ch.latestMsgId);
+      }
+    }
+  }
 
   if (serverData.thumbnail && serverData.thumbnail !== 'none') {
     serverThumbnailCache.set(serverId, serverData.thumbnail);
@@ -1054,6 +1195,9 @@ async function switchChannel(categoryName, channelName) {
   document.querySelectorAll('.channel').forEach(el => {
     el.classList.toggle('active',
       el.dataset.channel === channelName && el.dataset.category === categoryName);
+    if (el.dataset.channel === channelName && el.dataset.category === categoryName) {
+      el.classList.remove('unread');
+    }
   });
 
   document.getElementById('chat-channel-name').textContent = categoryName;
@@ -1084,6 +1228,9 @@ async function switchChannel(categoryName, channelName) {
   if (data.history && data.history.length > 0) {
     lastSeenId = data.history[0].id;
   }
+
+  const readKey = `${currentServer}/${categoryName}/${channelName}`;
+  lastReadIds.set(readKey, lastSeenId);
 
   startPolling();
 }
@@ -1153,7 +1300,7 @@ async function poll() {
 
     if (icon) {
       if (newThumb) {
-        icon.innerHTML = `<img src="/media/${newThumb}" alt="${currentServerName || ''}">`;
+        icon.innerHTML = `<img src="/media/${newThumb}" alt="${esc(currentServerName || '')}">`;
       } else {
         icon.innerHTML = '';
         icon.textContent = (currentServerName || '?')[0].toUpperCase();
@@ -1161,23 +1308,47 @@ async function poll() {
     }
   }
 
-  // Sync structure
+  // Sync structure (compare names only so latestMsgId changes don't trigger full re-render)
 
-  const structure = JSON.stringify(serverData.categories || []);
+  const structureNames = JSON.stringify(
+    (serverData.categories || []).map(cat => ({ name: cat.name, channels: (cat.channels || []).map(ch => ch.name) }))
+  );
 
-  if (structure !== lastServerStructure) {
-    lastServerStructure = structure;
+  if (structureNames !== lastServerStructure) {
+    lastServerStructure = structureNames;
     renderChannelSidebar(serverData);
 
     if (currentChannel) {
       const stillExists = (serverData.categories || []).some(cat =>
-        cat.name === currentCategory && (cat.channels || []).includes(currentChannel)
+        cat.name === currentCategory && (cat.channels || []).some(ch => ch.name === currentChannel)
       );
       if (!stillExists) {
         await recoverFromChannelLoss();
         return;
       }
     }
+  }
+
+  // Sync unread indicators
+
+  let hasUnreadChange = false;
+  for (const cat of serverData.categories || []) {
+    for (const ch of cat.channels || []) {
+      const key = `${currentServer}/${cat.name}/${ch.name}`;
+      const readId = lastReadIds.get(key);
+
+      if (readId !== undefined && ch.latestMsgId > readId) {
+        if (ch.name === currentChannel && cat.name === currentCategory) {
+          lastReadIds.set(key, ch.latestMsgId);
+        } else {
+          hasUnreadChange = true;
+        }
+      }
+    }
+  }
+
+  if (hasUnreadChange) {
+    renderChannelSidebar(serverData);
   }
 
   // Poll messages
@@ -1303,7 +1474,7 @@ function resetChatArea(reason) {
       <p>${reason}.</p>
     </div>`;
   document.getElementById('members-sidebar').innerHTML =
-    '<div class="member-category"><span>MEMBERS</span></div>';
+    '<div class="member-category"><span>CHANNEL MEMBERS</span></div>';
 }
 
 function renderServerLanding(serverData) {
@@ -1312,8 +1483,8 @@ function renderServerLanding(serverData) {
   const memberCount = (serverData.members || []).length;
 
   const iconInner = thumb
-    ? `<img src="/media/${thumb}" alt="${name}" style="width:64px;height:64px;border-radius:50%;object-fit:cover">`
-    : name[0].toUpperCase();
+    ? `<img src="/media/${thumb}" alt="${esc(name)}" style="width:64px;height:64px;border-radius:50%;object-fit:cover">`
+    : esc(name[0]).toUpperCase();
 
   document.getElementById('chat-channel-name').textContent = '—';
   document.getElementById('channel-topic').textContent = '';
@@ -1323,13 +1494,13 @@ function renderServerLanding(serverData) {
   document.getElementById('messages-container').innerHTML = `
     <div class="welcome-message">
       <div class="welcome-icon">${iconInner}</div>
-      <h1>Welcome to ${name}</h1>
-      <p>Owned by ${serverData.owner} · ${memberCount} member${memberCount !== 1 ? 's' : ''}</p>
+      <h1>Welcome to ${esc(name)}</h1>
+      <p>Owned by ${esc(serverData.owner)} · ${memberCount} member${memberCount !== 1 ? 's' : ''}</p>
       <p style="color:var(--text-muted);font-size:13px;margin-top:4px">Select a channel to start chatting.</p>
     </div>`;
 
   document.getElementById('members-sidebar').innerHTML =
-    '<div class="member-category"><span>MEMBERS</span></div>';
+    '<div class="member-category"><span>CHANNEL MEMBERS</span></div>';
 }
 
 
@@ -1356,14 +1527,14 @@ async function openExplore() {
   grid.innerHTML = servers.map(s => {
     const thumb = s.thumbnail && s.thumbnail !== 'none' ? s.thumbnail : null;
     const iconInner = thumb
-      ? `<img src="/media/${thumb}" alt="${s.name}">`
-      : s.name[0].toUpperCase();
+      ? `<img src="/media/${thumb}" alt="${esc(s.name)}">`
+      : esc(s.name[0]).toUpperCase();
 
     return `
       <div class="explore-card" data-server="${s.id}">
         <div class="explore-card-icon">${iconInner}</div>
-        <span class="explore-card-name">${s.name}</span>
-        <span class="explore-card-owner">Owner: ${s.owner}</span>
+        <span class="explore-card-name">${esc(s.name)}</span>
+        <span class="explore-card-owner">Owner: ${esc(s.owner)}</span>
       </div>`;
   }).join('');
 
@@ -1423,7 +1594,9 @@ async function sendMessage(text) {
       if (data.history && data.history.length > 0) lastSeenId = data.history[0].id;
     }
   } else {
+    stopPolling();
     await poll();
+    startPolling();
   }
 }
 
@@ -1463,7 +1636,7 @@ function updateUserUI() {
 
   const av = document.getElementById('user-avatar');
   if (session && session.profilePic) {
-    av.innerHTML = `<img src="/media/${session.profilePic}" alt="${name}">`;
+    av.innerHTML = `<img src="/media/${session.profilePic}" alt="${esc(name)}">`;
     av.style.background = 'transparent';
   } else {
     av.textContent = name[0].toUpperCase();
@@ -1619,13 +1792,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Message delete (delegated)
 
   document.getElementById('messages-container').addEventListener('click', async e => {
-    const btn = e.target.closest('.msg-delete-btn');
-    if (!btn) return;
-    if (!confirm('Delete this message?')) return;
+    const editBtn = e.target.closest('.msg-edit-btn');
+    if (editBtn) {
+      const msgId = parseInt(editBtn.dataset.msgId);
+      if (!isNaN(msgId)) startEditMessage(msgId);
+      return;
+    }
 
-    const msgId = parseInt(btn.dataset.msgId);
-    if (isNaN(msgId)) return;
-    await deleteMessage(msgId);
+    const delBtn = e.target.closest('.msg-delete-btn');
+    if (delBtn) {
+      if (!confirm('Delete this message?')) return;
+      const msgId = parseInt(delBtn.dataset.msgId);
+      if (!isNaN(msgId)) await deleteMessage(msgId);
+      return;
+    }
   });
 
   // Member invite/kick (delegated)
@@ -1735,6 +1915,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       icon.innerHTML = '';
       icon.textContent = (currentServerName || '?')[0].toUpperCase();
     }
+  });
+
+  document.getElementById('invite-to-server-btn').addEventListener('click', () => {
+    serverMenu.classList.remove('open');
+    inviteToServer();
+  });
+
+  document.getElementById('kick-from-server-btn').addEventListener('click', () => {
+    serverMenu.classList.remove('open');
+    kickFromServer();
   });
 
   document.getElementById('toggle-visibility-btn').addEventListener('click', async () => {

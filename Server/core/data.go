@@ -5,9 +5,13 @@ import (
 	"encoding/hex"
 	"net/http"
 	"slices"
+	"sync"
 )
 
 const MaxChannelHistory = 64
+
+// Mu guards all shared state. Acquire before any read or write to global data.
+var Mu sync.Mutex
 
 var (
 	Users         = map[string]*User{}

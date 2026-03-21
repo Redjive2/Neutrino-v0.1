@@ -35,9 +35,6 @@ func Tokenless(w http.ResponseWriter, message string, data any) {
 func WithToken(w http.ResponseWriter, user *User, message string, data any) {
 	token := NewToken()
 
-	user.PrevToken = user.Token
-	user.Token = token
-
 	bytes, err := json.Marshal(ServerResponse{
 		Message:      message,
 		Data:         data,
@@ -47,8 +44,14 @@ func WithToken(w http.ResponseWriter, user *User, message string, data any) {
 
 	if err != nil {
 		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  An INTERNAL ERROR occurred. Initial message: '" + message + "'; error message: '" + err.Error() + "'")
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	// Rotate token only after marshal succeeds, so a marshal failure
+	// doesn't leave the user locked out with an undelivered token.
+	user.PrevToken = user.Token
+	user.Token = token
 
 	fmt.Println("[" + fmt.Sprint(time.Now()) + "]  " + message)
 

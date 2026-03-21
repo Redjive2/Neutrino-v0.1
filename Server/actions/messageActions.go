@@ -201,5 +201,9 @@ func RemoveMessage(w http.ResponseWriter, r *http.Request) {
 		core.Messages = slices.Concat(core.Messages[:globalIdx], core.Messages[globalIdx+1:])
 	}
 
+	if userIdx := slices.Index(message.From.Messages, message); userIdx != -1 {
+		message.From.Messages = slices.Concat(message.From.Messages[:userIdx], message.From.Messages[userIdx+1:])
+	}
+
 	core.WithToken(w, user, "(INFO) Message #"+idString+" from user '"+user.Name+"' removed.", nil)
 }

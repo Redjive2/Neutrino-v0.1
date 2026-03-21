@@ -163,6 +163,12 @@ func KickUserFromServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if targetUser == server.Owner {
+		w.WriteHeader(http.StatusBadRequest)
+		core.WithToken(w, user, "(ERROR) Cannot kick the server owner.", nil)
+		return
+	}
+
 	if !slices.Contains(server.Members, targetUser) {
 		w.WriteHeader(http.StatusBadRequest)
 		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is not in server '"+serverId+"'.", nil)

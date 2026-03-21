@@ -56,13 +56,16 @@
             <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
           </svg>
         </button>
-        <button hidden class="leave-server-btn" id="leave-server-btn" title="Leave Server">
+        <button class="leave-server-btn" id="leave-server-btn" style="display:none" title="Leave Server">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
           </svg>
         </button>
         <button class="dropdown-arrow" id="server-menu-btn">&#9662;</button>
         <div class="server-menu" id="server-menu">
+          <button class="account-menu-item" id="invite-to-server-btn">Invite to Server</button>
+          <button class="account-menu-item" id="kick-from-server-btn">Kick from Server</button>
+          <div class="account-menu-sep"></div>
           <button class="account-menu-item" id="change-thumbnail-btn">Change Thumbnail</button>
           <button class="account-menu-item" id="remove-thumbnail-btn">Remove Thumbnail</button>
           <button class="account-menu-item" id="toggle-visibility-btn">Make Private</button>
@@ -133,7 +136,7 @@
 
     <!-- Members sidebar -->
     <aside class="members-sidebar" id="members-sidebar">
-      <div class="member-category"><span>MEMBERS</span></div>
+      <div class="member-category"><span>CHANNEL MEMBERS</span></div>
     </aside>
 
     <!-- Explore overlay (replaces channel sidebar + chat + members when open) -->

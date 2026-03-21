@@ -28,10 +28,12 @@ type EditPasswordRequest struct {
 	NewPassword string   `json:"newPassword"`
 }
 
+const maxBodySize = 1 << 20 // 1 MB
+
 func Parse[T any](r *http.Request) (T, error) {
 	var body T
 
-	bytes, err := io.ReadAll(r.Body)
+	bytes, err := io.ReadAll(io.LimitReader(r.Body, maxBodySize))
 	if err != nil {
 		return body, err
 	}

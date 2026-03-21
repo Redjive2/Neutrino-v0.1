@@ -57,9 +57,14 @@ func GetManifest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type ChannelInfo struct {
+	Name        string `json:"name"`
+	LatestMsgId int    `json:"latestMsgId"`
+}
+
 type CategoryData struct {
-	Name     string   `json:"name"`
-	Channels []string `json:"channels"`
+	Name     string        `json:"name"`
+	Channels []ChannelInfo `json:"channels"`
 }
 
 type ServerData struct {
@@ -107,11 +112,18 @@ func GetServerData(w http.ResponseWriter, r *http.Request) {
 	categories := make([]CategoryData, 0, len(server.Categories))
 
 	for _, category := range server.Categories {
-		channels := make([]string, 0, len(category.Channels))
+		channels := make([]ChannelInfo, 0, len(category.Channels))
 
 		for _, channel := range category.Channels {
 			if isOwner || slices.Contains(channel.Members, user) {
-				channels = append(channels, channel.Name)
+				latest := -1
+				if len(channel.History) > 0 {
+					latest = channel.History[0].Id
+				}
+				channels = append(channels, ChannelInfo{
+					Name:        channel.Name,
+					LatestMsgId: latest,
+				})
 			}
 		}
 
@@ -119,7 +131,9 @@ func GetServerData(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		sort.Strings(channels)
+		sort.Slice(channels, func(a, b int) bool {
+			return channels[a].Name < channels[b].Name
+		})
 
 		categories = append(categories, CategoryData{
 			Name:     category.Name,
