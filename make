@@ -8,7 +8,7 @@ fi
 
 if [[ $1 == "commit" ]]; then
   git add .
-  git commit -m $2
+  git commit -m "$2"
   git push
   exit 0
 fi
