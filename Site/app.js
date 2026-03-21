@@ -540,6 +540,7 @@ function renderChannelSidebar(serverData) {
           <span class="category-name">${esc(cat.name.toUpperCase())}</span>
           ${isOwner ? `
             <button class="add-channel-btn" data-category="${esc(cat.name)}" title="Add channel">+</button>
+            <button class="rename-cat-btn" data-category="${esc(cat.name)}" title="Rename category">&#9998;</button>
             <button class="remove-cat-btn" data-category="${esc(cat.name)}" title="Delete category">&#215;</button>
           ` : ''}
         </div>
@@ -555,7 +556,10 @@ function renderChannelSidebar(serverData) {
           <div class="channel${active}${unread}" data-channel="${esc(name)}" data-category="${esc(cat.name)}">
             <span class="channel-hash">#</span>
             <span class="channel-name">${esc(name)}</span>
-            ${isOwner ? `<button class="remove-channel-btn" data-channel="${esc(name)}" data-category="${esc(cat.name)}" title="Delete channel">&#215;</button>` : ''}
+            ${isOwner ? `
+              <button class="rename-channel-btn" data-channel="${esc(name)}" data-category="${esc(cat.name)}" title="Rename channel">&#9998;</button>
+              <button class="remove-channel-btn" data-channel="${esc(name)}" data-category="${esc(cat.name)}" title="Delete channel">&#215;</button>
+            ` : ''}
           </div>`;
       });
 
@@ -579,7 +583,7 @@ function renderChannelSidebar(serverData) {
 
   list.querySelectorAll('.channel-category').forEach(catEl => {
     catEl.addEventListener('click', e => {
-      if (e.target.closest('.add-channel-btn') || e.target.closest('.remove-cat-btn')) return;
+      if (e.target.closest('.add-channel-btn') || e.target.closest('.rename-cat-btn') || e.target.closest('.remove-cat-btn')) return;
 
       const catName = catEl.dataset.category;
       const channelsDiv = list.querySelector(`.category-channels[data-category="${catName}"]`);
@@ -613,6 +617,24 @@ function renderChannelSidebar(serverData) {
       if (confirm(`Delete category "${btn.dataset.category}" and all its channels?`)) {
         removeCategory(btn.dataset.category);
       }
+    });
+  });
+
+  // Rename category
+
+  list.querySelectorAll('.rename-cat-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      renameCategory(btn.dataset.category);
+    });
+  });
+
+  // Rename channel
+
+  list.querySelectorAll('.rename-channel-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      renameChannel(btn.dataset.category, btn.dataset.channel);
     });
   });
 
@@ -738,6 +760,68 @@ async function removeChannel(categoryName, channelName) {
 
   const first = document.querySelector('.channel[data-channel]');
   if (first) first.click();
+}
+
+async function renameServer() {
+  if (!currentServer) return;
+
+  const name = prompt('New server name:', currentServerName || '');
+  if (!name || !name.trim() || name.trim() === currentServerName) return;
+
+  const { ok } = await apiPost(
+    `/edit/server/${enc(currentServer)}/${enc(name.trim())}`,
+    authBody()
+  );
+  if (!ok) { alert('Could not rename server.'); return; }
+
+  currentServerName = name.trim();
+  document.querySelector('.server-name').textContent = currentServerName;
+
+  const icon = document.querySelector(`.server-icon[data-server="${currentServer}"]`);
+  if (icon) {
+    icon.title = currentServerName;
+    if (!serverThumbnailCache.get(currentServer)) {
+      icon.textContent = currentServerName[0].toUpperCase();
+    }
+  }
+}
+
+async function renameCategory(categoryName) {
+  const name = prompt('New category name:', categoryName);
+  if (!name || !name.trim() || name.trim() === categoryName) return;
+
+  const { ok } = await apiPost(
+    `/edit/category/${enc(currentServer)}/${enc(categoryName)}/${enc(name.trim())}`,
+    authBody()
+  );
+  if (!ok) { alert('Could not rename category.'); return; }
+
+  if (currentCategory === categoryName) {
+    currentCategory = name.trim();
+  }
+
+  const data = await fetchServerData(currentServer);
+  renderChannelSidebar(data);
+}
+
+async function renameChannel(categoryName, channelName) {
+  const name = prompt('New channel name:', channelName);
+  if (!name || !name.trim() || name.trim() === channelName) return;
+
+  const { ok } = await apiPost(
+    `/edit/channel/${enc(currentServer)}/${enc(categoryName)}/${enc(channelName)}/${enc(name.trim())}`,
+    authBody()
+  );
+  if (!ok) { alert('Could not rename channel.'); return; }
+
+  if (currentChannel === channelName && currentCategory === categoryName) {
+    currentChannel = name.trim();
+    document.getElementById('channel-topic').textContent = `#${currentChannel}`;
+    document.getElementById('message-input').placeholder = `Message #${currentChannel}`;
+  }
+
+  const data = await fetchServerData(currentServer);
+  renderChannelSidebar(data);
 }
 
 async function deleteServer() {
@@ -1201,7 +1285,7 @@ async function switchChannel(categoryName, channelName) {
   });
 
   document.getElementById('chat-channel-name').textContent = categoryName;
-  document.getElementById('channel-topic').textContent = `#${channelName}`;
+  document.getElementById('channel-topic').textContent = `# ${channelName}`;
   document.getElementById('message-input').placeholder = `Message #${channelName}`;
   document.getElementById('message-input').disabled = false;
 
@@ -1915,6 +1999,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       icon.innerHTML = '';
       icon.textContent = (currentServerName || '?')[0].toUpperCase();
     }
+  });
+
+  document.getElementById('rename-server-btn').addEventListener('click', () => {
+    serverMenu.classList.remove('open');
+    renameServer();
   });
 
   document.getElementById('invite-to-server-btn').addEventListener('click', () => {

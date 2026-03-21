@@ -1,42 +1,61 @@
-The API is as follows:
+The API is as follows. All endpoints are POST unless specified otherwise. Requests/responses are JSON.
+Token-bearing responses include { "newToken": [32]byte, "carriesToken": true }.
+The server accepts the current token OR the previous token (one-request resilience).
+Request bodies are capped at 1 MB.
 
 /new
-    /user/{name}                            { "password": string }                                        ->
-    /message/{server}/{category}/{channel}  { "username": string, "token": [32]byte, "content": string }  -> new token
-    /server/{name}                          { "username": string, "token": [32]byte }                     -> mew token
-    /category/{server}/{name}               { "username": string, "token": [32]byte }                     -> new token
-    /channel/{server}/{category}/{name}     { "username": string, "token": [32]byte }                     -> new token
-    
-/invite
-    /server/{user}/{server}                        { "username": string", "token": [32]byte }  -> new token
-    /channel/{user}/{server}/{category}/{channel}  { "username": string", "token": [32]byte }  -> new token
-/kick
-    /server/{user}/{server}                        { "username": string", "token": [32]byte }  -> new token
-    /channel/{user}/{server}/{category}/{channel}  { "username": string", "token": [32]byte }  -> new token
-    
+    /user/{name}                            { "password": string }                                                                -> 201
+    /message/{server}/{category}/{channel}  { "username": string, "token": [32]byte, "content": string, "attachments": []string } -> new token, message id
+    /server/{name}                          { "username": string, "token": [32]byte }                                             -> new token, { "id": string }
+    /category/{server}/{name}               { "username": string, "token": [32]byte }                                             -> new token
+    /channel/{server}/{category}/{name}     { "username": string, "token": [32]byte }                                             -> new token
+
+/join
+    /server/{server}  { "username": string, "token": [32]byte }  -> new token  (public servers only)
+/leave
+    /server/{server}  { "username": string, "token": [32]byte }  -> new token  (owner cannot leave)
+
+/invite  (owner only)
+    /server/{user}/{server}                        { "username": string, "token": [32]byte }  -> new token
+    /channel/{user}/{server}/{category}/{channel}  { "username": string, "token": [32]byte }  -> new token
+/kick  (owner only)
+    /server/{user}/{server}                        { "username": string, "token": [32]byte }  -> new token  (cannot kick owner)
+    /channel/{user}/{server}/{category}/{channel}  { "username": string, "token": [32]byte }  -> new token
+
 /open
-    /session/{user}  { "password": string }  ->  new token
+    /session/{user}  { "password": string }  -> new token
 /close
-    /session         { "username": string, "token": [32]byte }  ->
-    
+    /session  { "username": string, "token": [32]byte }  ->
+
 /remove
-    /user                                        { "username": string, "token": [32]byte }  ->
-    /message/{server}/{category}/{channel}/{id}  { "username": string, "token": [32]byte }  -> new token
-    /server/{server}                             { "username": string, "token": [32]byte }  -> new token
-    /category/{server}/{category}                { "username": string, "token": [32]byte }  -> new token
-    /channel/{server}/{category}/{channel}       { "username": string, "token": [32]byte }  -> new token
-    
+    /user                                        { "username": string, "token": [32]byte, "password": string }  ->  (cannot remove while owning servers)
+    /message/{server}/{category}/{channel}/{id}  { "username": string, "token": [32]byte }                      -> new token  (author or owner)
+    /server/{server}                             { "username": string, "token": [32]byte }                      -> new token  (owner only)
+    /category/{server}/{category}                { "username": string, "token": [32]byte }                      -> new token  (owner only)
+    /channel/{server}/{category}/{channel}       { "username": string, "token": [32]byte }                      -> new token  (owner only)
+
 /edit
-    /user/{newname}                                   { "username": string, "token": [32]byte }  -> new token
-    /password                                         { "username": string, "token": [32]byte, "password": string, "newPassword": string }  -> new token
-    /message/{server}/{category}/{channel}/{id}       { "username": string, "token": [32]byte }  -> new token
-    /server/{server}/{newname}                        { "username": string, "token": [32]byte }  -> new token
-    /category/{server}/{category}/{newname}           { "username": string, "token": [32]byte }  -> new token
-    /channel/{server}/{category}/{channel}/{newname}  { "username": string, "token": [32]byte }  -> new token
-    
+    /user/{newname}                                   { "username": string, "token": [32]byte }                                            -> new token
+    /password                                         { "username": string, "token": [32]byte, "password": string, "newPassword": string } -> new token
+    /message/{server}/{category}/{channel}/{id}       { "username": string, "token": [32]byte, "content": string }                         -> new token  (author or owner)
+    /server/{server}/{newname}                        { "username": string, "token": [32]byte }                                            -> new token  (owner only)
+    /category/{server}/{category}/{newname}           { "username": string, "token": [32]byte }                                            -> new token  (owner only)
+    /channel/{server}/{category}/{channel}/{newname}  { "username": string, "token": [32]byte }                                            -> new token  (owner only)
+    /profilepic/{mediaid}                             { "username": string, "token": [32]byte }                                            -> new token
+    /thumbnail/{server}/{mediaid}                     { "username": string, "token": [32]byte }                                            -> new token  (owner only, "none" to remove)
+    /serverorder                                      { "username": string, "token": [32]byte, "order": []string }                         -> new token
+    /visibility/{server}                              { "username": string, "token": [32]byte, "public": bool }                            -> new token  (owner only)
+
+/media
+         /upload   multipart form: username, token (hex), file  -> new token, { "id": string, "mimeType": string, "size": int }
+    GET  /{id}     (no auth)                                    -> file contents
+
 /get
-    /manifest                                 { "username": string, "token": [32]byte }  -> new token, []{ "name": string, "owner": string }
-    /server/{server}                          { "username": string, "token": [32]byte }  -> new token, { "owner": string, "members": []string, "categories": []{ "name": string, "channels": []string } }
-    /channel/{server}/{category}/{channel}    { "username": string, "token": [32]byte }  -> new token, { "members": []string, "history": []{ "from": string, "content": string, "id": int } }
-    /chat/{server}/{category}/{channel}/{id}  { "username": string, "token": [32]byte }  -> new token, []{ "from": string, "content": string, "id": int }
-    /sessionstatus                           { "username": string }  -> { "active": bool }
+    /manifest                                 { "username": string, "token": [32]byte }                    -> new token, { "servers": []{ "id": string, "name": string, "owner": string, "thumbnail": string, "public": bool }, "serverOrder": []string }
+    /server/{server}                          { "username": string, "token": [32]byte }                    -> new token, { "name": string, "owner": string, "members": []string, "categories": []{ "name": string, "channels": []{ "name": string, "latestMsgId": int } }, "thumbnail": string, "public": bool }
+    /channel/{server}/{category}/{channel}    { "username": string, "token": [32]byte, "before": int }     -> new token, { "members": []string, "history": []{ "from": string, "content": string, "id": int, "attachments": []{ "id": string, "mimeType": string } }, "hasMore": bool }
+    /chat/{server}/{category}/{channel}/{id}  { "username": string, "token": [32]byte }                    -> new token, []{ "from": string, "content": string, "id": int, "attachments": []{ "id": string, "mimeType": string } }
+    /sessionstatus                            { "username": string }                                        -> { "active": bool, "profilePic": string }
+
+/supervisor
+    /doupdate  { "password": string }  -> saves snapshot, exits with code 2 for supervisor restart

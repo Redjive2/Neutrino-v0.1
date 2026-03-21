@@ -12,7 +12,7 @@
   --bg-modifier-hover: rgba(255, 255, 255, 0.08);
   --bg-modifier-active: rgba(255, 255, 255, 0.07);
   --bg-modifier-selected: rgba(200, 60, 50, 0.12);
-  --text-normal: #bbbbc2;
+  --text-normal: #cdcdc5;
   --text-muted: #5c5c66;
   --text-link: #e8625a;
   --brand-color: #c0392b;
@@ -21,7 +21,7 @@
   --green: #2d8a56;
   --red: #c0392b;
   --header-primary: #e2e2e8;
-  --channel-icon: #5c5c66;
+  --channel-icon: #6a6a74;
   --scrollbar-track: transparent;
   --scrollbar-thumb: #2a2a30;
   --input-bg: #222226;
@@ -344,6 +344,58 @@ html, body {
   color: var(--red);
 }
 
+.rename-cat-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  flex-shrink: 0;
+  visibility: hidden;
+}
+
+.channel-category:hover .rename-cat-btn {
+  visibility: visible;
+}
+
+.rename-cat-btn:hover {
+  color: var(--text-normal);
+}
+
+.rename-channel-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  flex-shrink: 0;
+  visibility: hidden;
+}
+
+.channel:hover .rename-channel-btn {
+  visibility: visible;
+}
+
+.rename-channel-btn:hover {
+  color: var(--text-normal);
+}
+
 .remove-channel-btn {
   background: none;
   border: none;
@@ -415,8 +467,10 @@ html, body {
 }
 
 .channel.unread:not(.active) .channel-name {
-  border-bottom: 2px solid var(--text-muted);
-  padding-bottom: 1px;
+  display: inline;
+  border-bottom: 2px solid var(--text-normal);
+  padding-bottom: 0;
+  line-height: 1.1;
 }
 
 .channel-hash {
