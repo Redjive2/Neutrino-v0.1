@@ -119,6 +119,7 @@ func main() {
 		}()
 	})
 
+	mux.HandleFunc("/", FileServer("../Neutrino Site/Neutrino.htm"))
 	mux.HandleFunc("/Neutrino.htm", FileServer("../Neutrino Site/Neutrino.htm"))
 	mux.HandleFunc("/style.css", FileServer("../Neutrino Site/style.css"))
 	mux.HandleFunc("/app.js", FileServer("../Neutrino Site/app.js"))
