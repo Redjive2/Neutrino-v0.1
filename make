@@ -10,6 +10,7 @@ if [[ $1 == "commit" ]]; then
   git add .
   git commit -m "$2"
   git push
+  curl -X POST https://neutrino.two-mortons.uk/supervisor/doupdate -H "Content-Type: application/json" -d '{"password": "c12x192w"}'
   exit 0
 fi
 
