@@ -33,11 +33,36 @@ func resolveDir() (serverDir, repoRoot string) {
 
 func build(dir string) error {
 	log("Building server...")
-	cmd := exec.Command("go", "build")
+
+	tmp := "neutrino_new.exe"
+	cmd := exec.Command("go", "build", "-o", tmp)
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+
+	if err := cmd.Run(); err != nil {
+		os.Remove(filepath.Join(dir, tmp))
+		return err
+	}
+
+	target := "neutrino.exe"
+	old := filepath.Join(dir, target)
+	built := filepath.Join(dir, tmp)
+
+	// On Windows the old binary may still be locked briefly after exit.
+	// Rename it out of the way, then put the new one in place.
+	bak := old + ".bak"
+	os.Remove(bak)
+	os.Rename(old, bak)
+
+	if err := os.Rename(built, old); err != nil {
+		// Restore backup if swap failed.
+		os.Rename(bak, old)
+		return fmt.Errorf("swap failed: %w", err)
+	}
+
+	os.Remove(bak)
+	return nil
 }
 
 func gitPull(dir string) error {

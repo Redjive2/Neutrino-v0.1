@@ -95,6 +95,7 @@ func main() {
 		var body struct {
 			Password string `json:"password"`
 		}
+		
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Password != "c12x192w" {
 			w.WriteHeader(http.StatusForbidden)
 			return
