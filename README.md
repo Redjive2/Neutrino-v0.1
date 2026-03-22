@@ -15,7 +15,7 @@ The project structure is as follows:
 To build, simply:
 - Install the latest version of Go
 - Install the latest version of Bash
-- Run `./make build` to build both the server 
+- Run `./make build` to build both the server and supervisor
 
 And to run:
 - \[Just the server] Run `./Server/server <port>` or `./make serve <port>` (which builds the server first)
