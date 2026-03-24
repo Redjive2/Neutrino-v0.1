@@ -9,10 +9,21 @@ import (
 )
 
 func CreateUser(w http.ResponseWriter, r *http.Request) {
-	username := r.PathValue("name")
+	username, valid := core.ValidateName(r.PathValue("name"), 3, 64)
+	if !valid {
+		w.WriteHeader(http.StatusBadRequest)
+		core.Tokenless(w, "(ERROR) Invalid username. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		return
+	}
 
 	body, ok := core.MustParse[core.PassRequest](w, r)
 	if !ok {
+		return
+	}
+
+	if len(body.Password) < 8 {
+		w.WriteHeader(http.StatusBadRequest)
+		core.Tokenless(w, "(ERROR) Password must be at least 8 characters.", nil)
 		return
 	}
 
@@ -22,7 +33,15 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	id, err := core.NewUserID()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		core.Tokenless(w, "(ERROR) Could not generate user ID.", nil)
+		return
+	}
+
 	user := core.User{
+		Id:          id,
 		Name:        username,
 		Messages:    []*core.Message{},
 		Token:       [32]byte{},
@@ -68,6 +87,19 @@ func RemoveUser(w http.ResponseWriter, r *http.Request) {
 
 	delete(core.Users, user.Name)
 
+	// Reassign all of the user's messages to the DeletedUser sentinel
+	for _, msg := range user.Messages {
+		msg.From = core.DeletedUser
+	}
+	// Reassign reactions from this user
+	for _, msg := range core.Messages {
+		for i := range msg.Reactions {
+			if msg.Reactions[i].From == user {
+				msg.Reactions[i].From = core.DeletedUser
+			}
+		}
+	}
+
 	for _, server := range core.Servers {
 		serverIndex := slices.Index(server.Members, user)
 		if serverIndex == -1 {
@@ -94,7 +126,12 @@ func RemoveUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func EditUser(w http.ResponseWriter, r *http.Request) {
-	newUsername := r.PathValue("newname")
+	newUsername, valid := core.ValidateName(r.PathValue("newname"), 3, 64)
+	if !valid {
+		w.WriteHeader(http.StatusBadRequest)
+		core.Tokenless(w, "(ERROR) Invalid username. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		return
+	}
 
 	body, ok := core.MustParse[core.SimpleRequest](w, r)
 	if !ok {
@@ -163,6 +200,12 @@ func EditPassword(w http.ResponseWriter, r *http.Request) {
 	if !core.CheckPassword(body.Password, user.Password) {
 		w.WriteHeader(http.StatusUnauthorized)
 		core.WithToken(w, user, "(ERROR) Incorrect password for user '"+user.Name+"'.", nil)
+		return
+	}
+
+	if len(body.NewPassword) < 8 {
+		w.WriteHeader(http.StatusBadRequest)
+		core.WithToken(w, user, "(ERROR) New password must be at least 8 characters.", nil)
 		return
 	}
 

@@ -6,15 +6,15 @@ if [[ $1 == "" ]]; then
 fi
 
 if [[ $1 == "help" ]]; then
-    echo " [----------------------------------------------------------------------------------------------------]"
-    echo " | ./make: Neutrino build helper                                                                      |"
-    echo " | -----------------------------                                                                      |"
-    echo " | -> clean            : Remove all build artifacts.                                                  |"  
-    echo " | -> commit           : Add, commit, and push Neutrino to Github, then update the remote supervisor. |"
-    echo " | -> build            : Build the server and supervisor for the current environment.                 |"
-    echo " | -> serve     <port> : Build and run just the server for the current env. on the port given.        |"
-    echo " | -> supervise <port> : Build and run the supervisor for the current env. on the port given.         |"
-    echo " [----------------------------------------------------------------------------------------------------]"
+    echo "[----------------------------------------------------------------------------------------------------]"
+    echo "| ./make: Neutrino build helper                                                                      |"
+    echo "| -----------------------------                                                                      |"
+    echo "| -> clean            : Remove all build artifacts.                                                  |"  
+    echo "| -> commit           : Add, commit, and push Neutrino to Github, then update the remote supervisor. |"
+    echo "| -> build            : Build the server and supervisor for the current environment.                 |"
+    echo "| -> serve     <port> : Build and run just the server for the current env. on the port given.        |"
+    echo "| -> supervise <port> : Build and run the supervisor for the current env. on the port given.         |"
+    echo "[----------------------------------------------------------------------------------------------------]"
 fi
 
 if [[ $1 == "clean" ]]; then
@@ -53,4 +53,3 @@ if [[ $1 == "supervise" ]]; then
 fi
 
 echo "'$1' is not a valid subcommand. Use './make help' for a list of subcommands."
-    

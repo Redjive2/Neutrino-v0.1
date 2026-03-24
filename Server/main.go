@@ -7,9 +7,12 @@ import (
 	"neutrino/actions"
 	"neutrino/core"
 	"neutrino/media"
+	"neutrino/secret"
 	"neutrino/serial"
 	"os"
+	"os/signal"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -29,6 +32,11 @@ func main() {
 
 	fmt.Println("[" + fmt.Sprint(time.Now()) + "]  Initializing server.")
 
+	if err := secret.Load("secret/supervisor.key"); err != nil {
+		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  FATAL: could not load supervisor key: " + err.Error())
+		return
+	}
+
 	if err := media.EnsureDir(); err != nil {
 		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  FATAL: could not create media directory: " + err.Error())
 		return
@@ -46,6 +54,19 @@ func main() {
 	// Start automatic snapshotting (5-min primary, 1-hour backup)
 	serial.StartAutoSnapshot(snapshotFile, backupFile)
 
+	// Graceful shutdown: save snapshot on SIGINT/SIGTERM
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigCh
+		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  Received " + sig.String() + ", saving final snapshot...")
+		core.Mu.Lock()
+		serial.SnapshotAndTrim(snapshotFile)
+		core.Mu.Unlock()
+		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  Snapshot saved. Exiting.")
+		os.Exit(0)
+	}()
+
 	mux := http.NewServeMux()
 
 	// Mutation endpoints — mark data dirty after each call
@@ -54,6 +75,7 @@ func main() {
 	mux.HandleFunc("POST /new/server/{name}", mutating(actions.CreateServer))
 	mux.HandleFunc("POST /new/category/{server}/{name}", mutating(actions.CreateCategory))
 	mux.HandleFunc("POST /new/channel/{server}/{category}/{name}", mutating(actions.CreateChannel))
+	mux.HandleFunc("POST /new/reaction/{server}/{category}/{channel}/{id}", mutating(actions.ReactMessage))
 
 	mux.HandleFunc("POST /join/server/{server}", mutating(actions.JoinServer))
 	mux.HandleFunc("POST /leave/server/{server}", mutating(actions.LeaveServer))
@@ -71,6 +93,7 @@ func main() {
 	mux.HandleFunc("POST /remove/server/{server}", mutating(actions.RemoveServer))
 	mux.HandleFunc("POST /remove/category/{server}/{category}", mutating(actions.RemoveCategory))
 	mux.HandleFunc("POST /remove/channel/{server}/{category}/{channel}", mutating(actions.RemoveChannel))
+	mux.HandleFunc("POST /remove/reaction/{server}/{category}/{channel}/{id}", mutating(actions.RemoveReaction))
 
 	mux.HandleFunc("POST /edit/user/{newname}", mutating(actions.EditUser))
 	mux.HandleFunc("POST /edit/password", mutating(actions.EditPassword))
@@ -100,7 +123,7 @@ func main() {
 			Password string `json:"password"`
 		}
 
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Password != "c12x192w" {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Password != secret.SupervisorPassword {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -137,7 +160,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	http.Serve(ln, mux)
+	fmt.Println("[" + fmt.Sprint(time.Now()) + "]  Listening on :" + port)
+	if err := http.Serve(ln, mux); err != nil {
+		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  FATAL: " + err.Error())
+		os.Exit(1)
+	}
 }
 
 // statusWriter captures the response status code so mutating() can check

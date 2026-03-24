@@ -8,7 +8,12 @@ import (
 )
 
 func CreateServer(w http.ResponseWriter, r *http.Request) {
-	serverName := r.PathValue("name")
+	serverName, valid := core.ValidateName(r.PathValue("name"), 3, 64)
+	if !valid {
+		w.WriteHeader(http.StatusBadRequest)
+		core.Tokenless(w, "(ERROR) Invalid server name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		return
+	}
 
 	body, ok := core.MustParse[core.SimpleRequest](w, r)
 	if !ok {
@@ -45,7 +50,12 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 
 func CreateCategory(w http.ResponseWriter, r *http.Request) {
 	serverId := r.PathValue("server")
-	categoryName := r.PathValue("name")
+	categoryName, valid := core.ValidateName(r.PathValue("name"), 3, 64)
+	if !valid {
+		w.WriteHeader(http.StatusBadRequest)
+		core.Tokenless(w, "(ERROR) Invalid category name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		return
+	}
 
 	body, ok := core.MustParse[core.SimpleRequest](w, r)
 	if !ok {
@@ -77,7 +87,15 @@ func CreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	catId, err := core.NewCategoryID()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		core.WithToken(w, user, "(ERROR) Could not generate category ID.", nil)
+		return
+	}
+
 	category := core.Category{
+		Id:       catId,
 		Name:     categoryName,
 		Channels: map[string]*core.Channel{},
 	}
@@ -91,7 +109,12 @@ func CreateCategory(w http.ResponseWriter, r *http.Request) {
 func CreateChannel(w http.ResponseWriter, r *http.Request) {
 	serverId := r.PathValue("server")
 	categoryName := r.PathValue("category")
-	channelName := r.PathValue("name")
+	channelName, valid := core.ValidateName(r.PathValue("name"), 3, 64)
+	if !valid {
+		w.WriteHeader(http.StatusBadRequest)
+		core.Tokenless(w, "(ERROR) Invalid channel name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		return
+	}
 
 	body, ok := core.MustParse[core.SimpleRequest](w, r)
 	if !ok {
@@ -131,10 +154,26 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	chId, err := core.NewChannelID()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		core.WithToken(w, user, "(ERROR) Could not generate channel ID.", nil)
+		return
+	}
+
+	var members []*core.User
+	if server.Public {
+		members = make([]*core.User, len(server.Members))
+		copy(members, server.Members)
+	} else {
+		members = []*core.User{user}
+	}
+
 	channel := core.Channel{
+		Id:      chId,
 		Name:    channelName,
 		History: []*core.Message{},
-		Members: []*core.User{user},
+		Members: members,
 	}
 
 	category.Channels[channelName] = &channel
@@ -170,9 +209,10 @@ func RemoveServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clean up channels and categories from global slices
+	// Clean up messages, channels, and categories from global slices
 	for _, category := range server.Categories {
 		for _, channel := range category.Channels {
+			core.RemoveChannelMessages(channel)
 			if idx := slices.Index(core.Channels, channel); idx != -1 {
 				core.Channels = slices.Concat(core.Channels[:idx], core.Channels[idx+1:])
 			}
@@ -223,8 +263,9 @@ func RemoveCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clean up channels from global slice
+	// Clean up messages and channels from global slices
 	for _, channel := range category.Channels {
+		core.RemoveChannelMessages(channel)
 		if idx := slices.Index(core.Channels, channel); idx != -1 {
 			core.Channels = slices.Concat(core.Channels[:idx], core.Channels[idx+1:])
 		}
@@ -284,6 +325,8 @@ func RemoveChannel(w http.ResponseWriter, r *http.Request) {
 
 	channel := category.Channels[channelName]
 
+	core.RemoveChannelMessages(channel)
+
 	delete(category.Channels, channelName)
 
 	if idx := slices.Index(core.Channels, channel); idx != -1 {
@@ -295,7 +338,12 @@ func RemoveChannel(w http.ResponseWriter, r *http.Request) {
 
 func EditServer(w http.ResponseWriter, r *http.Request) {
 	serverId := r.PathValue("server")
-	newServerName := r.PathValue("newname")
+	newServerName, valid := core.ValidateName(r.PathValue("newname"), 3, 64)
+	if !valid {
+		w.WriteHeader(http.StatusBadRequest)
+		core.Tokenless(w, "(ERROR) Invalid server name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		return
+	}
 
 	body, ok := core.MustParse[core.SimpleRequest](w, r)
 	if !ok {
@@ -329,7 +377,12 @@ func EditServer(w http.ResponseWriter, r *http.Request) {
 func EditCategory(w http.ResponseWriter, r *http.Request) {
 	serverId := r.PathValue("server")
 	categoryName := r.PathValue("category")
-	newCategoryName := r.PathValue("newname")
+	newCategoryName, valid := core.ValidateName(r.PathValue("newname"), 3, 64)
+	if !valid {
+		w.WriteHeader(http.StatusBadRequest)
+		core.Tokenless(w, "(ERROR) Invalid category name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		return
+	}
 
 	body, ok := core.MustParse[core.SimpleRequest](w, r)
 	if !ok {
@@ -380,7 +433,12 @@ func EditChannel(w http.ResponseWriter, r *http.Request) {
 	serverId := r.PathValue("server")
 	categoryName := r.PathValue("category")
 	channelName := r.PathValue("channel")
-	newChannelName := r.PathValue("newname")
+	newChannelName, valid := core.ValidateName(r.PathValue("newname"), 3, 64)
+	if !valid {
+		w.WriteHeader(http.StatusBadRequest)
+		core.Tokenless(w, "(ERROR) Invalid channel name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		return
+	}
 
 	body, ok := core.MustParse[core.SimpleRequest](w, r)
 	if !ok {

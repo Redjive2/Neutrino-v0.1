@@ -162,11 +162,48 @@ type AttachmentInfo struct {
 	MimeType string `json:"mimeType"`
 }
 
+type ReactionData struct {
+	From    string `json:"from"`
+	Content string `json:"content"`
+}
+
+type ReplyData struct {
+	Id      int    `json:"id"`
+	From    string `json:"from"`
+	Content string `json:"content"`
+}
+
 type MessageData struct {
 	From        string           `json:"from"`
 	Content     string           `json:"content"`
 	Id          int              `json:"id"`
+	Timestamp   int64            `json:"timestamp"`
 	Attachments []AttachmentInfo `json:"attachments,omitempty"`
+	Reactions   []ReactionData   `json:"reactions"`
+	ReplyTo     *ReplyData       `json:"replyTo"`
+}
+
+func resolveReply(msg *core.Message) *ReplyData {
+	if msg == nil || msg.RepliesTo == nil {
+		return nil
+	}
+	content := msg.RepliesTo.Content
+	if len(content) > 100 {
+		content = content[:100] + "…"
+	}
+	return &ReplyData{
+		Id:      msg.RepliesTo.Id,
+		From:    msg.RepliesTo.From.Name,
+		Content: content,
+	}
+}
+
+func resolveReactions(reactions []core.Reaction) []ReactionData {
+	out := make([]ReactionData, len(reactions))
+	for i, r := range reactions {
+		out[i] = ReactionData{From: r.From.Name, Content: r.Content}
+	}
+	return out
 }
 
 const pageSize = 64
@@ -250,7 +287,10 @@ func GetChannelData(w http.ResponseWriter, r *http.Request) {
 			From:        message.From.Name,
 			Content:     message.Content,
 			Id:          message.Id,
+			Timestamp:   message.Timestamp.UnixMilli(),
 			Attachments: resolveAttachments(message.Attachments),
+			Reactions:   resolveReactions(message.Reactions),
+			ReplyTo:     resolveReply(message),
 		}
 	}
 
@@ -316,11 +356,27 @@ func GetChatsSince(w http.ResponseWriter, r *http.Request) {
 			From:        message.From.Name,
 			Content:     message.Content,
 			Id:          message.Id,
+			Timestamp:   message.Timestamp.UnixMilli(),
 			Attachments: resolveAttachments(message.Attachments),
+			Reactions:   resolveReactions(message.Reactions),
+			ReplyTo:     resolveReply(message),
 		}
 	}
 
-	core.WithToken(w, user, "(INFO) Chats since #"+lastIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"' sent to '"+user.Name+"'.", messagesData)
+	members := make([]string, len(channel.Members))
+	for i, member := range channel.Members {
+		members[i] = member.Name
+	}
+
+	type ChatsSinceData struct {
+		Messages []MessageData `json:"messages"`
+		Members  []string      `json:"members"`
+	}
+
+	core.WithToken(w, user, "(INFO) Chats since #"+lastIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"' sent to '"+user.Name+"'.", ChatsSinceData{
+		Messages: messagesData,
+		Members:  members,
+	})
 }
 
 type NamedRequest struct {

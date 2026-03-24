@@ -4,11 +4,13 @@ The server accepts the current token OR the previous token (one-request resilien
 Request bodies are capped at 1 MB.
 
 /new
-    /user/{name}                            { "password": string }                                                                -> 201
-    /message/{server}/{category}/{channel}  { "username": string, "token": [32]byte, "content": string, "attachments": []string } -> new token, message id
-    /server/{name}                          { "username": string, "token": [32]byte }                                             -> new token, { "id": string }
-    /category/{server}/{name}               { "username": string, "token": [32]byte }                                             -> new token
-    /channel/{server}/{category}/{name}     { "username": string, "token": [32]byte }                                             -> new token
+    /user/{name}                                  { "password": string }                                             -> 201
+    /message/{server}/{category}/{channel}        { "username": string, "token": [32]byte, "content": string, "attachments": []string } -> new token, message id
+    /server/{name}                                { "username": string, "token": [32]byte }                                             -> new token, { "id": string }
+    /category/{server}/{name}                     { "username": string, "token": [32]byte }                                             -> new token
+    /channel/{server}/{category}/{name}           { "username": string, "token": [32]byte }                                             -> new token
+    /reaction/{server}/{category}/{channel}/{id}  { "username": string, "token": [32]byte, "content": string (length = 1) }                      -> new token
+    
 
 /join
     /server/{server}  { "username": string, "token": [32]byte }  -> new token  (public servers only)
@@ -28,11 +30,12 @@ Request bodies are capped at 1 MB.
     /session  { "username": string, "token": [32]byte }  ->
 
 /remove
-    /user                                        { "username": string, "token": [32]byte, "password": string }  ->  (cannot remove while owning servers)
-    /message/{server}/{category}/{channel}/{id}  { "username": string, "token": [32]byte }                      -> new token  (author or owner)
-    /server/{server}                             { "username": string, "token": [32]byte }                      -> new token  (owner only)
-    /category/{server}/{category}                { "username": string, "token": [32]byte }                      -> new token  (owner only)
-    /channel/{server}/{category}/{channel}       { "username": string, "token": [32]byte }                      -> new token  (owner only)
+    /user                                         { "username": string, "token": [32]byte, "password": string }  ->  (cannot remove while owning servers)
+    /message/{server}/{category}/{channel}/{id}   { "username": string, "token": [32]byte }                      -> new token  (author or owner)
+    /server/{server}                              { "username": string, "token": [32]byte }                      -> new token  (owner only)
+    /category/{server}/{category}                 { "username": string, "token": [32]byte }                      -> new token  (owner only)
+    /channel/{server}/{category}/{channel}        { "username": string, "token": [32]byte }                      -> new token  (owner only)
+    /reaction/{server}/{category}/{channel}/{id}  { "username": string, "token": [32]byte }                      -> new token
 
 /edit
     /user/{newname}                                   { "username": string, "token": [32]byte }                                            -> new token

@@ -4,14 +4,44 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"regexp"
 	"slices"
+	"strings"
 	"sync"
 )
 
 const MaxChannelHistory = 64
 
+var validNameRe = regexp.MustCompile(`^[a-zA-Z0-9_\-()\s]+$`)
+
+// ValidateName trims whitespace and checks length and character set.
+// Returns the trimmed name and true if valid, or empty string and false otherwise.
+func ValidateName(name string, minLen, maxLen int) (string, bool) {
+	name = strings.TrimSpace(name)
+	if len(name) < minLen || len(name) > maxLen {
+		return "", false
+	}
+	if !validNameRe.MatchString(name) {
+		return "", false
+	}
+	return name, true
+}
+
 // Mu guards all shared state. Acquire before any read or write to global data.
 var Mu sync.Mutex
+
+const DeletedUserID = "deleted"
+
+// DeletedUser is a sentinel user for messages whose author has been removed.
+var DeletedUser = &User{Id: DeletedUserID, Name: "[deleted]"}
+
+func NewUserID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
 
 var (
 	Users         = map[string]*User{}
@@ -58,8 +88,39 @@ func TrimChannelHistories() {
 	for _, u := range Users {
 		u.Messages = nil
 	}
+	DeletedUser.Messages = nil
 	for _, msg := range Messages {
 		msg.From.Messages = append(msg.From.Messages, msg)
+	}
+}
+
+// RemoveChannelMessages removes all messages in a channel from the global
+// Messages list and from each author's User.Messages list.
+func RemoveChannelMessages(ch *Channel) {
+	toRemove := make(map[*Message]bool, len(ch.History))
+	for _, msg := range ch.History {
+		toRemove[msg] = true
+	}
+
+	// Remove from global list
+	filtered := make([]*Message, 0, len(Messages)-len(toRemove))
+	for _, msg := range Messages {
+		if !toRemove[msg] {
+			filtered = append(filtered, msg)
+		}
+	}
+	Messages = filtered
+
+	// Remove from each user's message list
+	for _, msg := range ch.History {
+		u := msg.From
+		userFiltered := make([]*Message, 0, len(u.Messages))
+		for _, m := range u.Messages {
+			if !toRemove[m] {
+				userFiltered = append(userFiltered, m)
+			}
+		}
+		u.Messages = userFiltered
 	}
 }
 
@@ -98,6 +159,22 @@ func (re ResolutionError) Status() int {
 	}
 
 	return status
+}
+
+func NewCategoryID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func NewChannelID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func NewServerID() (string, error) {

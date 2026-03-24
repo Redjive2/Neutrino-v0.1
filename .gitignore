@@ -1,0 +1,4 @@
+Server/data/
+Server/secret/supervisor.key
+Server/server
+.DS_Store

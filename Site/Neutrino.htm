@@ -19,13 +19,17 @@
         <button class="login-tab" id="tab-register">Register</button>
       </div>
       <div id="login-form">
+        <label for="login-username" class="sr-only">Username</label>
         <input type="text" id="login-username" placeholder="Username" autocomplete="username">
+        <label for="login-password" class="sr-only">Password</label>
         <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
         <button class="btn-primary" id="login-btn">Log In</button>
         <div class="login-error" id="login-error"></div>
       </div>
       <div id="register-form" style="display:none">
+        <label for="reg-username" class="sr-only">Username</label>
         <input type="text" id="reg-username" placeholder="Username" autocomplete="off">
+        <label for="reg-password" class="sr-only">Password</label>
         <input type="password" id="reg-password" placeholder="Password" autocomplete="new-password">
         <button class="btn-primary" id="reg-btn">Create Account</button>
         <div class="login-error" id="reg-error"></div>
@@ -35,8 +39,8 @@
 
   <div class="app">
     <!-- Server list sidebar -->
-    <nav class="server-list">
-      <div class="server-icon home" id="explore-btn" title="Explore Servers">
+    <nav class="server-list" aria-label="Servers">
+      <div class="server-icon home" id="explore-btn" title="Explore Servers" role="button" tabindex="0">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5.5-2.5l7.51-3.49L17.5 6.5 9.99 9.99 6.5 17.5zm5.5-6.6c.61 0 1.1.49 1.1 1.1s-.49 1.1-1.1 1.1-1.1-.49-1.1-1.1.49-1.1 1.1-1.1z"/>
         </svg>
@@ -44,11 +48,11 @@
       <div class="server-separator"></div>
       <div id="server-icons-container"></div>
       <div class="server-separator" id="server-sep-bottom"></div>
-      <div class="server-icon add-server" title="Add a Server">+</div>
+      <div class="server-icon add-server" title="Add a Server" role="button" tabindex="0">+</div>
     </nav>
 
     <!-- Channel sidebar -->
-    <aside class="channel-sidebar">
+    <aside class="channel-sidebar" aria-label="Channels">
       <div class="server-header" id="server-header">
         <h2 class="server-name">Neutrino</h2>
         <button class="delete-server-btn" id="delete-server-btn" title="Delete Server">
@@ -62,14 +66,14 @@
           </svg>
         </button>
         <button class="dropdown-arrow" id="server-menu-btn">&#9662;</button>
-        <div class="server-menu" id="server-menu">
-          <button class="account-menu-item" id="invite-to-server-btn">Invite to Server</button>
-          <button class="account-menu-item" id="kick-from-server-btn">Kick from Server</button>
+        <div class="server-menu" id="server-menu" role="menu" aria-label="Server options">
+          <button class="account-menu-item" role="menuitem" id="invite-to-server-btn">Invite to Server</button>
+          <button class="account-menu-item" role="menuitem" id="kick-from-server-btn">Kick from Server</button>
           <div class="account-menu-sep"></div>
-          <button class="account-menu-item" id="rename-server-btn">Rename Server</button>
-          <button class="account-menu-item" id="change-thumbnail-btn">Change Thumbnail</button>
-          <button class="account-menu-item" id="remove-thumbnail-btn">Remove Thumbnail</button>
-          <button class="account-menu-item" id="toggle-visibility-btn">Make Private</button>
+          <button class="account-menu-item" role="menuitem" id="rename-server-btn">Rename Server</button>
+          <button class="account-menu-item" role="menuitem" id="change-thumbnail-btn">Change Thumbnail</button>
+          <button class="account-menu-item" role="menuitem" id="remove-thumbnail-btn">Remove Thumbnail</button>
+          <button class="account-menu-item" role="menuitem" id="toggle-visibility-btn">Make Private</button>
         </div>
       </div>
       <div class="channel-list" id="channel-list">
@@ -88,12 +92,12 @@
             </svg>
           </button>
         </div>
-        <div class="account-menu" id="account-menu">
-          <button class="account-menu-item" id="change-pfp-btn">Change Profile Picture</button>
-          <button class="account-menu-item" id="change-username-btn">Change Username</button>
-          <button class="account-menu-item" id="change-password-btn">Change Password</button>
+        <div class="account-menu" id="account-menu" role="menu" aria-label="Account options">
+          <button class="account-menu-item" role="menuitem" id="change-pfp-btn">Change Profile Picture</button>
+          <button class="account-menu-item" role="menuitem" id="change-username-btn">Change Username</button>
+          <button class="account-menu-item" role="menuitem" id="change-password-btn">Change Password</button>
           <div class="account-menu-sep"></div>
-          <button class="account-menu-item" id="logout-btn">Log Out</button>
+          <button class="account-menu-item" role="menuitem" id="logout-btn">Log Out</button>
           <button class="account-menu-item danger" id="delete-account-btn">Delete Account</button>
         </div>
       </div>
@@ -102,6 +106,9 @@
     <!-- Main chat area -->
     <main class="chat-area">
       <header class="chat-header">
+        <button class="mobile-menu-btn" id="mobile-menu-btn" title="Toggle sidebar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+        </button>
         <span class="channel-hash">/</span>
         <span class="chat-channel-name" id="chat-channel-name">—</span>
         <div class="header-divider"></div>
@@ -127,6 +134,7 @@
         <div class="attachment-preview-strip" id="attachment-preview-strip"></div>
         <div class="input-wrapper">
           <button class="attach-btn" id="attach-btn" title="Attach file"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
+          <label for="message-input" class="sr-only">Message</label>
           <input type="text" id="message-input" placeholder="Select a channel first" autocomplete="off" disabled>
           <div class="input-actions">
             <button class="emoji-btn" id="emoji-btn" title="Emoji"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
@@ -136,7 +144,7 @@
     </main>
 
     <!-- Members sidebar -->
-    <aside class="members-sidebar" id="members-sidebar">
+    <aside class="members-sidebar" id="members-sidebar" aria-label="Members">
       <div class="member-category"><span>CHANNEL MEMBERS</span></div>
     </aside>
 
@@ -155,10 +163,26 @@
 
   <!-- Emoji picker -->
   <div class="emoji-picker" id="emoji-picker">
+    <label for="emoji-search" class="sr-only">Search emojis</label>
+    <input type="text" class="emoji-search" id="emoji-search" placeholder="Search emojis…" autocomplete="off">
     <div class="emoji-grid" id="emoji-grid"></div>
+    <div class="emoji-search-results" id="emoji-search-results"></div>
   </div>
 
   <input type="file" id="file-input" style="display:none" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm" multiple>
+
+  <!-- Custom prompt modal -->
+  <div class="prompt-overlay" id="prompt-overlay">
+    <div class="prompt-box">
+      <div class="prompt-message" id="prompt-message"></div>
+      <label for="prompt-input" class="sr-only">Input</label>
+      <input id="prompt-input" class="prompt-input" autocomplete="off">
+      <div class="prompt-buttons">
+        <button class="prompt-btn prompt-cancel" id="prompt-cancel">Cancel</button>
+        <button class="prompt-btn prompt-ok" id="prompt-ok">OK</button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

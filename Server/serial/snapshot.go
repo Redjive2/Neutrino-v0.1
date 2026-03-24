@@ -87,12 +87,16 @@ func StartAutoSnapshot(primaryPath, backupPath string) {
 		for {
 			select {
 			case <-primaryTicker.C:
+				core.Mu.Lock()
 				if !core.Dirty {
+					core.Mu.Unlock()
 					continue
 				}
 				core.Dirty = false
+				err := saveTo(primaryPath)
+				core.Mu.Unlock()
 
-				if err := lockedSaveTo(primaryPath); err != nil {
+				if err != nil {
 					log("Snapshot FAILED: " + err.Error())
 				} else {
 					log("Snapshot saved to " + primaryPath)

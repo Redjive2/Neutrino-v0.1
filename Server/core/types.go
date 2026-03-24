@@ -13,17 +13,20 @@ type Server struct {
 }
 
 type Category struct {
+	Id       string
 	Name     string
 	Channels map[string]*Channel
 }
 
 type Channel struct {
+	Id      string
 	Name    string
 	History []*Message
 	Members []*User
 }
 
 type User struct {
+	Id          string
 	Name        string
 	Messages    []*Message
 	Token       [32]byte
@@ -39,7 +42,15 @@ type Message struct {
 	From        *User
 	Content     string
 	Id          int
+	Timestamp   time.Time
 	Attachments []string // media IDs
+	Reactions   []Reaction
+	RepliesTo   *Message
+}
+
+type Reaction struct {
+	From    *User
+	Content string
 }
 
 type Media struct {

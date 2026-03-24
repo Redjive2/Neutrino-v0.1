@@ -29,6 +29,7 @@ func Tokenless(w http.ResponseWriter, message string, data any) {
 
 	fmt.Println("[" + fmt.Sprint(time.Now()) + "]  " + message)
 
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(bytes)
 }
 
@@ -55,5 +56,6 @@ func WithToken(w http.ResponseWriter, user *User, message string, data any) {
 
 	fmt.Println("[" + fmt.Sprint(time.Now()) + "]  " + message)
 
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(bytes)
 }

@@ -2,12 +2,18 @@ package core
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"net/http"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+// HashToken returns the SHA-256 hash of a session token.
+func HashToken(token [32]byte) [32]byte {
+	return sha256.Sum256(token[:])
+}
 
 func NewToken() [32]byte {
 	var token [32]byte
