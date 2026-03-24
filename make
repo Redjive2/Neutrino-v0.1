@@ -14,6 +14,8 @@ if [[ $1 == "help" ]]; then
     echo "| -> build            : Build the server and supervisor for the current environment.                 |"
     echo "| -> serve     <port> : Build and run just the server for the current env. on the port given.        |"
     echo "| -> supervise <port> : Build and run the supervisor for the current env. on the port given.         |"
+    echo "| -> pull             : Runs git stash & git pull.                                                   |"
+    echo "| -> update           : Updates the remote supervisor.                                               |"
     echo "[----------------------------------------------------------------------------------------------------]"
 fi
 
@@ -28,7 +30,8 @@ if [[ $1 == "commit" ]]; then
   git add .
   git commit -m "$2"
   git push
-  curl -X POST https://neutrino.two-mortons.uk/supervisor/doupdate -H "Content-Type: application/json" -d '{"password": "c12x192w"}'
+  sleep 3s
+  curl -X POST https://neutrino.two-mortons.uk/supervisor/doupdate -H "Content-Type: application/json" -d "{\"password\": \"$(cat ~/neutrino_admin_pass.key)\"}"
   exit 0
 fi
 
@@ -51,5 +54,17 @@ if [[ $1 == "supervise" ]]; then
     ./supervisor $2
     exit 0
 fi
+
+if [[ $1 == "pull" ]]; then
+    git stash
+    git pull
+    exit 0
+fi
+
+if [[ $1 == "update" ]]; then
+    curl -X POST https://neutrino.two-mortons.uk/supervisor/doupdate -H "Content-Type: application/json" -d "{\"password\": \"$(cat ~/neutrino_admin_pass.key)\"}"
+    exit 0
+fi
+
 
 echo "'$1' is not a valid subcommand. Use './make help' for a list of subcommands."

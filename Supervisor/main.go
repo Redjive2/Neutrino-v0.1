@@ -80,10 +80,21 @@ func build(dir string) error {
 
 func gitPull(dir string) error {
 	log("Pulling latest changes...")
-	cmd := exec.Command("git", "pull")
+	cmd := exec.Command("git", "stash")
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	
+	cmd = exec.Command("git", "pull")
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	
 	return cmd.Run()
 }
 

@@ -32,7 +32,7 @@ func main() {
 
 	fmt.Println("[" + fmt.Sprint(time.Now()) + "]  Initializing server.")
 
-	if err := secret.Load("secret/supervisor.key"); err != nil {
+	if err := secret.Load("~/neutrino_admin_pass.key"); err != nil {
 		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  FATAL: could not load supervisor key: " + err.Error())
 		return
 	}
