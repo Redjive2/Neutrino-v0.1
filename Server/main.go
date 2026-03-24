@@ -210,6 +210,7 @@ func mutating(handler http.HandlerFunc) http.HandlerFunc {
 
 func FileServer(name string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, name)
 	}
 }
