@@ -17,7 +17,7 @@ func UploadMedia(w http.ResponseWriter, r *http.Request) {
 
 	if err := r.ParseMultipartForm(media.MaxFileSize); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Could not parse multipart form: "+err.Error(), nil)
+		core.Tokenless(w, "(ERROR) Could not parse multipart form: "+err.Error(), nil, "Could not read the upload.")
 		return
 	}
 
@@ -28,7 +28,7 @@ func UploadMedia(w http.ResponseWriter, r *http.Request) {
 	tokenBytes, err := hex.DecodeString(tokenHex)
 	if err != nil || len(tokenBytes) != 32 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Invalid token format.", nil)
+		core.Tokenless(w, "(ERROR) Invalid token format.", nil, "Invalid session token.")
 		return
 	}
 
@@ -44,7 +44,7 @@ func UploadMedia(w http.ResponseWriter, r *http.Request) {
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) No file provided.", nil)
+		core.WithToken(w, user, "(ERROR) No file provided.", nil, "No file was included in the upload.")
 		return
 	}
 	defer file.Close()
@@ -52,13 +52,13 @@ func UploadMedia(w http.ResponseWriter, r *http.Request) {
 	data, err := io.ReadAll(file)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Could not read file.", nil)
+		core.WithToken(w, user, "(ERROR) Could not read file.", nil, "Failed to read the uploaded file.")
 		return
 	}
 
 	if int64(len(data)) > media.MaxFileSize {
 		w.WriteHeader(http.StatusRequestEntityTooLarge)
-		core.WithToken(w, user, "(ERROR) File exceeds 10 MB limit.", nil)
+		core.WithToken(w, user, "(ERROR) File exceeds 10 MB limit.", nil, "File is too large (max 10 MB).")
 		return
 	}
 
@@ -66,7 +66,7 @@ func UploadMedia(w http.ResponseWriter, r *http.Request) {
 	mimeType, allowed := media.DetectType(data)
 	if !allowed {
 		w.WriteHeader(http.StatusUnsupportedMediaType)
-		core.WithToken(w, user, "(ERROR) File type '"+mimeType+"' is not allowed.", nil)
+		core.WithToken(w, user, "(ERROR) File type '"+mimeType+"' is not allowed.", nil, "File type '"+mimeType+"' is not supported.")
 		return
 	}
 
@@ -74,13 +74,13 @@ func UploadMedia(w http.ResponseWriter, r *http.Request) {
 	id, err := media.NewID()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		core.WithToken(w, user, "(ERROR) Could not generate media ID.", nil)
+		core.WithToken(w, user, "(ERROR) Could not generate media ID.", nil, "Failed to process the upload. Please try again.")
 		return
 	}
 
 	if err := media.Save(id, data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		core.WithToken(w, user, "(ERROR) Could not save media file.", nil)
+		core.WithToken(w, user, "(ERROR) Could not save media file.", nil, "Failed to save the file to disk. Please try again.")
 		return
 	}
 
@@ -105,7 +105,7 @@ func UploadMedia(w http.ResponseWriter, r *http.Request) {
 		Id:       id,
 		MimeType: mimeType,
 		Size:     int64(len(data)),
-	})
+	}, "")
 }
 
 func ServeMedia(w http.ResponseWriter, r *http.Request) {
@@ -152,20 +152,20 @@ func SetProfilePic(w http.ResponseWriter, r *http.Request) {
 
 	if mediaId == "none" {
 		user.ProfilePic = ""
-		core.WithToken(w, user, "(INFO) Profile picture cleared for '"+user.Name+"'.", nil)
+		core.WithToken(w, user, "(INFO) Profile picture cleared for '"+user.Name+"'.", nil, "")
 		return
 	}
 
 	if !media.ValidateID(mediaId) {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Invalid media ID.", nil)
+		core.WithToken(w, user, "(ERROR) Invalid media ID.", nil, "Invalid media ID.")
 		return
 	}
 
 	m, found := core.MediaItems[mediaId]
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Media '"+mediaId+"' not found.", nil)
+		core.WithToken(w, user, "(ERROR) Media '"+mediaId+"' not found.", nil, "That media doesn't exist.")
 		return
 	}
 
@@ -175,12 +175,12 @@ func SetProfilePic(w http.ResponseWriter, r *http.Request) {
 		// ok
 	default:
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Profile pictures must be images.", nil)
+		core.WithToken(w, user, "(ERROR) Profile pictures must be images.", nil, "Profile pictures must be image files.")
 		return
 	}
 
 	user.ProfilePic = mediaId
-	core.WithToken(w, user, "(INFO) Profile picture set for '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Profile picture set for '"+user.Name+"'.", nil, "")
 }
 
 func SetServerThumbnail(w http.ResponseWriter, r *http.Request) {
@@ -201,32 +201,32 @@ func SetServerThumbnail(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "That server doesn't exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is unauthorized to set thumbnail for server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is unauthorized to set thumbnail for server '"+serverId+"'.", nil, "You must be the server owner to change the thumbnail.")
 		return
 	}
 
 	if mediaId == "none" {
 		server.Thumbnail = ""
-		core.WithToken(w, user, "(INFO) Server thumbnail cleared for server '"+serverId+"' by user '"+user.Name+"'.", nil)
+		core.WithToken(w, user, "(INFO) Server thumbnail cleared for server '"+serverId+"' by user '"+user.Name+"'.", nil, "")
 		return
 	}
 
 	if !media.ValidateID(mediaId) {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Invalid media ID.", nil)
+		core.WithToken(w, user, "(ERROR) Invalid media ID.", nil, "Invalid media ID.")
 		return
 	}
 
 	m, found := core.MediaItems[mediaId]
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Media '"+mediaId+"' not found.", nil)
+		core.WithToken(w, user, "(ERROR) Media '"+mediaId+"' not found.", nil, "That media doesn't exist.")
 		return
 	}
 
@@ -236,10 +236,10 @@ func SetServerThumbnail(w http.ResponseWriter, r *http.Request) {
 		// ok
 	default:
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Server thumbnails must be images.", nil)
+		core.WithToken(w, user, "(ERROR) Server thumbnails must be images.", nil, "Server thumbnails must be image files.")
 		return
 	}
 
 	server.Thumbnail = mediaId
-	core.WithToken(w, user, "(INFO) Server thumbnail set for server '"+serverId+"' by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Server thumbnail set for server '"+serverId+"' by user '"+user.Name+"'.", nil, "")
 }

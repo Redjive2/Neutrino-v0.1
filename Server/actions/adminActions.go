@@ -24,13 +24,13 @@ func AddUserToServer(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "That server doesn't exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to add target user '"+targetUsername+"' to server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to add target user '"+targetUsername+"' to server '"+serverId+"'.", nil, "You must be the server owner to add members.")
 		return
 	}
 
@@ -38,13 +38,13 @@ func AddUserToServer(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' does not exist.", nil, "That user doesn't exist.")
 		return
 	}
 
 	if slices.Contains(server.Members, targetUser) {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is already in server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is already in server '"+serverId+"'.", nil, targetUsername+" is already in this server.")
 		return
 	}
 
@@ -58,7 +58,7 @@ func AddUserToServer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	core.WithToken(w, user, "(INFO) Target user '"+targetUsername+"' added to server '"+serverId+"' by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Target user '"+targetUsername+"' added to server '"+serverId+"' by user '"+user.Name+"'.", nil, "")
 }
 
 func AddUserToChannel(w http.ResponseWriter, r *http.Request) {
@@ -81,13 +81,13 @@ func AddUserToChannel(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "That server doesn't exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to add target user '"+targetUsername+"' to channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to add target user '"+targetUsername+"' to channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "You must be the server owner to add members to channels.")
 		return
 	}
 
@@ -95,13 +95,13 @@ func AddUserToChannel(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' does not exist.", nil, "That user doesn't exist.")
 		return
 	}
 
 	if !slices.Contains(server.Members, targetUser) {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is not in server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is not in server '"+serverId+"'.", nil, targetUsername+" isn't in this server.")
 		return
 	}
 
@@ -111,20 +111,20 @@ func AddUserToChannel(w http.ResponseWriter, r *http.Request) {
 		re := err.(core.ResolutionError)
 
 		w.WriteHeader(re.Status())
-		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil, "Could not find that channel.")
 
 		return
 	}
 
 	if slices.Contains(channel.Members, targetUser) {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is already in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is already in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, targetUsername+" is already in this channel.")
 		return
 	}
 
 	channel.Members = append(channel.Members, targetUser)
 
-	core.WithToken(w, user, "(INFO) Target user '"+targetUsername+"' added to channel '"+serverId+"/"+categoryName+":"+channelName+"' by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Target user '"+targetUsername+"' added to channel '"+serverId+"/"+categoryName+":"+channelName+"' by user '"+user.Name+"'.", nil, "")
 }
 
 func KickUserFromServer(w http.ResponseWriter, r *http.Request) {
@@ -145,13 +145,13 @@ func KickUserFromServer(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "That server doesn't exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusUnauthorized)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' does not own server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' does not own server '"+serverId+"'.", nil, "You must be the server owner to kick members.")
 		return
 	}
 
@@ -159,19 +159,19 @@ func KickUserFromServer(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' does not exist.", nil, "That user doesn't exist.")
 		return
 	}
 
 	if targetUser == server.Owner {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Cannot kick the server owner.", nil)
+		core.WithToken(w, user, "(ERROR) Cannot kick the server owner.", nil, "You can't kick yourself from your own server.")
 		return
 	}
 
 	if !slices.Contains(server.Members, targetUser) {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is not in server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is not in server '"+serverId+"'.", nil, targetUsername+" isn't in this server.")
 		return
 	}
 
@@ -190,7 +190,7 @@ func KickUserFromServer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	core.WithToken(w, user, "(INFO) Target user '"+targetUsername+"' kicked from server '"+serverId+"' by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Target user '"+targetUsername+"' kicked from server '"+serverId+"' by user '"+user.Name+"'.", nil, "")
 }
 
 func KickUserFromChannel(w http.ResponseWriter, r *http.Request) {
@@ -213,13 +213,13 @@ func KickUserFromChannel(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "That server doesn't exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusUnauthorized)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' does not own server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' does not own server '"+serverId+"'.", nil, "You must be the server owner to kick members from channels.")
 		return
 	}
 
@@ -227,13 +227,13 @@ func KickUserFromChannel(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' does not exist.", nil, "That user doesn't exist.")
 		return
 	}
 
 	if !slices.Contains(server.Members, targetUser) {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is not in server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is not in server '"+serverId+"'.", nil, targetUsername+" isn't in this server.")
 		return
 	}
 
@@ -243,7 +243,7 @@ func KickUserFromChannel(w http.ResponseWriter, r *http.Request) {
 		re := err.(core.ResolutionError)
 
 		w.WriteHeader(re.Status())
-		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil, "Could not find that channel.")
 
 		return
 	}
@@ -252,11 +252,11 @@ func KickUserFromChannel(w http.ResponseWriter, r *http.Request) {
 
 	if index == -1 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is not in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Target user '"+targetUsername+"' is not in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, targetUsername+" isn't in this channel.")
 		return
 	}
 
 	channel.Members = slices.Concat(channel.Members[:index], channel.Members[index+1:])
 
-	core.WithToken(w, user, "(INFO) Target user '"+targetUsername+"' kicked from channel '"+serverId+"/"+categoryName+":"+channelName+"' by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Target user '"+targetUsername+"' kicked from channel '"+serverId+"/"+categoryName+":"+channelName+"' by user '"+user.Name+"'.", nil, "")
 }

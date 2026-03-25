@@ -11,7 +11,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 	serverName, valid := core.ValidateName(r.PathValue("name"), 3, 64)
 	if !valid {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Invalid server name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		core.Tokenless(w, "(ERROR) Invalid server name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil, "Server names must be 3-64 characters and contain letters/numbers/_-() and spaces only.")
 		return
 	}
 
@@ -28,7 +28,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 	id, err := core.NewServerID()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		core.WithToken(w, user, "(ERROR) Could not generate server ID.", nil)
+		core.WithToken(w, user, "(ERROR) Could not generate server ID.", nil, "Failed to create the server. Please try again.")
 		return
 	}
 
@@ -45,7 +45,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 	core.Servers[id] = &server
 
 	w.WriteHeader(http.StatusCreated)
-	core.WithToken(w, user, "(INFO) Server '"+serverName+"' created by user '"+user.Name+"'.", map[string]string{"id": id})
+	core.WithToken(w, user, "(INFO) Server '"+serverName+"' created by user '"+user.Name+"'.", map[string]string{"id": id}, "")
 }
 
 func CreateCategory(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +53,7 @@ func CreateCategory(w http.ResponseWriter, r *http.Request) {
 	categoryName, valid := core.ValidateName(r.PathValue("name"), 3, 64)
 	if !valid {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Invalid category name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		core.Tokenless(w, "(ERROR) Invalid category name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil, "Category names must be 3-64 characters and contain letters/numbers/_-() and spaces only.")
 		return
 	}
 
@@ -71,26 +71,26 @@ func CreateCategory(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "This server does not exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to create category '"+serverId+"/"+categoryName+"' in server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to create category '"+serverId+"/"+categoryName+"' in server '"+serverId+"'.", nil, "You must be the server owner to create categories.")
 		return
 	}
 
 	if _, categoryAlreadyExists := server.Categories[categoryName]; categoryAlreadyExists {
 		w.WriteHeader(http.StatusNotAcceptable)
-		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' already exists.", nil)
+		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' already exists.", nil, "This category already exists.")
 		return
 	}
 
 	catId, err := core.NewCategoryID()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		core.WithToken(w, user, "(ERROR) Could not generate category ID.", nil)
+		core.WithToken(w, user, "(ERROR) Could not generate category ID.", nil, "Failed to create the category. Please try again.")
 		return
 	}
 
@@ -103,7 +103,7 @@ func CreateCategory(w http.ResponseWriter, r *http.Request) {
 	server.Categories[categoryName] = &category
 	core.Categories = append(core.Categories, &category)
 
-	core.WithToken(w, user, "(INFO) Category '"+serverId+"/"+categoryName+"' created by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Category '"+serverId+"/"+categoryName+"' created by user '"+user.Name+"'.", nil, "")
 }
 
 func CreateChannel(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +112,7 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 	channelName, valid := core.ValidateName(r.PathValue("name"), 3, 64)
 	if !valid {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Invalid channel name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		core.Tokenless(w, "(ERROR) Invalid channel name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil, "Channel names must be 3-64 characters, letters/numbers/_-() and spaces only.")
 		return
 	}
 
@@ -130,13 +130,13 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "This server does not exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to create channel '"+serverId+"/"+categoryName+":"+channelName+"' edit server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to create channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "You must be the server owner to create channels.")
 		return
 	}
 
@@ -144,20 +144,20 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' does not exist.", nil, "")
 		return
 	}
 
 	if _, channelAlreadyExists := category.Channels[channelName]; channelAlreadyExists {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Channel '"+serverId+"/"+categoryName+":"+channelName+"' already exists.", nil)
+		core.WithToken(w, user, "(ERROR) Channel '"+serverId+"/"+categoryName+":"+channelName+"' already exists.", nil, "This channel already exists.")
 		return
 	}
 
 	chId, err := core.NewChannelID()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		core.WithToken(w, user, "(ERROR) Could not generate channel ID.", nil)
+		core.WithToken(w, user, "(ERROR) Could not generate channel ID.", nil, "Failed to create the channel. Please try again.")
 		return
 	}
 
@@ -179,7 +179,7 @@ func CreateChannel(w http.ResponseWriter, r *http.Request) {
 	category.Channels[channelName] = &channel
 	core.Channels = append(core.Channels, &channel)
 
-	core.WithToken(w, user, "(INFO) Channel '"+serverId+"/"+categoryName+":"+channelName+"' created by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Channel '"+serverId+"/"+categoryName+":"+channelName+"' created by user '"+user.Name+"'.", nil, "")
 }
 
 func RemoveServer(w http.ResponseWriter, r *http.Request) {
@@ -199,13 +199,13 @@ func RemoveServer(w http.ResponseWriter, r *http.Request) {
 
 	if !serverExists {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "This server does not exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to remove server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to remove server '"+serverId+"'.", nil, "You must be the owner to remove this server.")
 		return
 	}
 
@@ -224,7 +224,7 @@ func RemoveServer(w http.ResponseWriter, r *http.Request) {
 
 	delete(core.Servers, serverId)
 
-	core.WithToken(w, user, "(INFO) Server '"+serverId+"' removed by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Server '"+serverId+"' removed by user '"+user.Name+"'.", nil, "")
 }
 
 func RemoveCategory(w http.ResponseWriter, r *http.Request) {
@@ -245,13 +245,13 @@ func RemoveCategory(w http.ResponseWriter, r *http.Request) {
 
 	if !serverExists {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "This server does not exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to remove category '"+serverId+"/"+categoryName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to remove category '"+serverId+"/"+categoryName+"'.", nil, "You must be the server owner to remove this category.")
 		return
 	}
 
@@ -259,7 +259,7 @@ func RemoveCategory(w http.ResponseWriter, r *http.Request) {
 
 	if !categoryExists {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' does not exist.", nil, "This category does not exist.")
 		return
 	}
 
@@ -277,7 +277,7 @@ func RemoveCategory(w http.ResponseWriter, r *http.Request) {
 		core.Categories = slices.Concat(core.Categories[:idx], core.Categories[idx+1:])
 	}
 
-	core.WithToken(w, user, "(INFO) Category '"+serverId+"/"+categoryName+"' removed by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Category '"+serverId+"/"+categoryName+"' removed by user '"+user.Name+"'.", nil, "")
 }
 
 func RemoveChannel(w http.ResponseWriter, r *http.Request) {
@@ -299,13 +299,13 @@ func RemoveChannel(w http.ResponseWriter, r *http.Request) {
 
 	if !serverExists {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "This server does not exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to remove channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to remove channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "You must be the owner to remove this channel.")
 		return
 	}
 
@@ -313,13 +313,13 @@ func RemoveChannel(w http.ResponseWriter, r *http.Request) {
 
 	if !categoryExists {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' does not exist.", nil, "This category does not exist.")
 		return
 	}
 
 	if _, channelExists := category.Channels[channelName]; !channelExists {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Channel '"+serverId+"/"+categoryName+":"+channelName+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Channel '"+serverId+"/"+categoryName+":"+channelName+"' does not exist.", nil, "This channel does not exist.")
 		return
 	}
 
@@ -333,7 +333,7 @@ func RemoveChannel(w http.ResponseWriter, r *http.Request) {
 		core.Channels = slices.Concat(core.Channels[:idx], core.Channels[idx+1:])
 	}
 
-	core.WithToken(w, user, "(INFO) Channel '"+serverId+"/"+categoryName+":"+channelName+"' removed by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Channel '"+serverId+"/"+categoryName+":"+channelName+"' removed by user '"+user.Name+"'.", nil, "")
 }
 
 func EditServer(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +341,7 @@ func EditServer(w http.ResponseWriter, r *http.Request) {
 	newServerName, valid := core.ValidateName(r.PathValue("newname"), 3, 64)
 	if !valid {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Invalid server name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		core.Tokenless(w, "(ERROR) Invalid server name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil, "Server names must be 3-64 characters, letters/numbers/_-() and spaces only.")
 		return
 	}
 
@@ -359,19 +359,19 @@ func EditServer(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "Server does not exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to edit server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to edit server '"+serverId+"'.", nil, "You must be the owner to edit this server's name.")
 		return
 	}
 
 	server.Name = newServerName
 
-	core.WithToken(w, user, "(INFO) Server '"+serverId+"' name changed to '"+newServerName+"'.", nil)
+	core.WithToken(w, user, "(INFO) Server '"+serverId+"' name changed to '"+newServerName+"'.", nil, "")
 }
 
 func EditCategory(w http.ResponseWriter, r *http.Request) {
@@ -380,7 +380,7 @@ func EditCategory(w http.ResponseWriter, r *http.Request) {
 	newCategoryName, valid := core.ValidateName(r.PathValue("newname"), 3, 64)
 	if !valid {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Invalid category name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		core.Tokenless(w, "(ERROR) Invalid category name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil, "Category names must be 3-64 characters, letters/numbers/_-() and spaces only.")
 		return
 	}
 
@@ -396,7 +396,7 @@ func EditCategory(w http.ResponseWriter, r *http.Request) {
 
 	if categoryName == newCategoryName {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' already has name '"+serverId+"/"+categoryName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' already has name '"+serverId+"/"+categoryName+"'.", nil, "This category already has this name. Stupid.")
 		return
 	}
 
@@ -404,7 +404,7 @@ func EditCategory(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "This server does not exist.")
 		return
 	}
 
@@ -412,13 +412,13 @@ func EditCategory(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' does not exist.", nil, "This category does not exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to edit server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to edit category '"+serverId+"/"+categoryName+"'.", nil, "You must be the server owner to rename categories.")
 		return
 	}
 
@@ -426,7 +426,7 @@ func EditCategory(w http.ResponseWriter, r *http.Request) {
 	delete(server.Categories, categoryName)
 	server.Categories[newCategoryName] = category
 
-	core.WithToken(w, user, "(INFO) Category '"+serverId+"/"+categoryName+"' name changed to '"+serverId+"/"+newCategoryName+"'.", nil)
+	core.WithToken(w, user, "(INFO) Category '"+serverId+"/"+categoryName+"' name changed to '"+serverId+"/"+newCategoryName+"'.", nil, "")
 }
 
 func EditChannel(w http.ResponseWriter, r *http.Request) {
@@ -436,7 +436,7 @@ func EditChannel(w http.ResponseWriter, r *http.Request) {
 	newChannelName, valid := core.ValidateName(r.PathValue("newname"), 3, 64)
 	if !valid {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Invalid channel name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		core.Tokenless(w, "(ERROR) Invalid channel name. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil, "Channel names must be 3-64 characters, letters/numbers/_-() and spaces only.")
 		return
 	}
 
@@ -450,23 +450,17 @@ func EditChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if channelName == newChannelName {
-		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Channel '"+serverId+"/"+categoryName+":"+channelName+"' already has name '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
-		return
-	}
-
 	server, found := core.Servers[serverId]
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "This server does not exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to edit server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to edit channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "You must be the owner to edit this channel.")
 		return
 	}
 
@@ -474,7 +468,7 @@ func EditChannel(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Category '"+serverId+"/"+categoryName+"' does not exist.", nil, "This category does not exist.")
 		return
 	}
 
@@ -482,7 +476,13 @@ func EditChannel(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Channel '"+serverId+"/"+categoryName+":"+channelName+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Channel '"+serverId+"/"+categoryName+":"+channelName+"' does not exist.", nil, "This channel does not exist.")
+		return
+	}
+	
+	if channelName == newChannelName {
+		w.WriteHeader(http.StatusBadRequest)
+		core.WithToken(w, user, "(ERROR) Channel '"+serverId+"/"+categoryName+":"+channelName+"' already has name '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "This channel ALREADY HAS THIS NAME.")
 		return
 	}
 
@@ -490,7 +490,7 @@ func EditChannel(w http.ResponseWriter, r *http.Request) {
 	delete(category.Channels, channelName)
 	category.Channels[newChannelName] = channel
 
-	core.WithToken(w, user, "(INFO) Channel '"+serverId+"/"+categoryName+":"+channelName+"' name changed to '"+serverId+"/"+categoryName+":"+newChannelName+"'.", nil)
+	core.WithToken(w, user, "(INFO) Channel '"+serverId+"/"+categoryName+":"+channelName+"' name changed to '"+serverId+"/"+categoryName+":"+newChannelName+"'.", nil, "")
 }
 
 func JoinServer(w http.ResponseWriter, r *http.Request) {
@@ -510,19 +510,19 @@ func JoinServer(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "This server does not exist.")
 		return
 	}
 
 	if !server.Public {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' is private.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' is private.", nil, "This server is private.")
 		return
 	}
 
 	if slices.Contains(server.Members, user) {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is already in server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is already in server '"+serverId+"'.", nil, "You're already in this server, brotisserie chicken.")
 		return
 	}
 
@@ -536,7 +536,7 @@ func JoinServer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	core.WithToken(w, user, "(INFO) User '"+user.Name+"' joined server '"+serverId+"'.", nil)
+	core.WithToken(w, user, "(INFO) User '"+user.Name+"' joined server '"+serverId+"'.", nil, "")
 }
 
 func LeaveServer(w http.ResponseWriter, r *http.Request) {
@@ -556,13 +556,13 @@ func LeaveServer(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "This server does not exist.")
 		return
 	}
 
 	if user == server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) Owner cannot leave server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Owner cannot leave server '"+serverId+"'.", nil, "You cannot leave your own server. Come on, man.")
 		return
 	}
 
@@ -570,7 +570,7 @@ func LeaveServer(w http.ResponseWriter, r *http.Request) {
 
 	if index == -1 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not in server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not in server '"+serverId+"'.", nil, "You aren't even in this server.")
 		return
 	}
 
@@ -585,7 +585,7 @@ func LeaveServer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	core.WithToken(w, user, "(INFO) User '"+user.Name+"' left server '"+serverId+"'.", nil)
+	core.WithToken(w, user, "(INFO) User '"+user.Name+"' left server '"+serverId+"'.", nil, "")
 }
 
 func SetServerVisibility(w http.ResponseWriter, r *http.Request) {
@@ -611,17 +611,17 @@ func SetServerVisibility(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil)
+		core.WithToken(w, user, "(ERROR) Server '"+serverId+"' does not exist.", nil, "This server does not exist.")
 		return
 	}
 
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to change visibility of server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to change visibility of server '"+serverId+"'.", nil, "You must be the owner to change the visibility of this server.")
 		return
 	}
 
 	server.Public = body.Public
 
-	core.WithToken(w, user, "(INFO) Server '"+serverId+"' visibility set to public="+fmt.Sprint(body.Public)+" by user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Server '"+serverId+"' visibility set to public="+fmt.Sprint(body.Public)+" by user '"+user.Name+"'.", nil, "")
 }

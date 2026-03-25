@@ -12,7 +12,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	username, valid := core.ValidateName(r.PathValue("name"), 3, 64)
 	if !valid {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Invalid username. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		core.Tokenless(w, "(ERROR) Invalid username. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil, "Usernames must be 3-64 characters and contain letters/numbers/_-() and spaces only.")
 		return
 	}
 
@@ -23,20 +23,20 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	if len(body.Password) < 8 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Password must be at least 8 characters.", nil)
+		core.Tokenless(w, "(ERROR) Password must be at least 8 characters.", nil, "Password must be at least 8 characters.")
 		return
 	}
 
 	if _, userAlreadyExists := core.Users[username]; userAlreadyExists {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) User '"+username+"' already exists.", nil)
+		core.Tokenless(w, "(ERROR) User '"+username+"' already exists.", nil, username + " already exists.")
 		return
 	}
 
 	id, err := core.NewUserID()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		core.Tokenless(w, "(ERROR) Could not generate user ID.", nil)
+		core.Tokenless(w, "(ERROR) Could not generate user ID.", nil, "Failed to create user account. Please try again.")
 		return
 	}
 
@@ -52,7 +52,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	core.Users[username] = &user
 
 	w.WriteHeader(http.StatusCreated)
-	core.Tokenless(w, "(INFO) User '"+username+"' created.", nil)
+	core.Tokenless(w, "(INFO) User '"+username+"' created.", nil, "")
 }
 
 func RemoveUser(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +68,7 @@ func RemoveUser(w http.ResponseWriter, r *http.Request) {
 
 	if !core.CheckPassword(body.Password, user.Password) {
 		w.WriteHeader(http.StatusUnauthorized)
-		core.WithToken(w, user, "(ERROR) Incorrect password for user '"+body.Username+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Incorrect password for user '"+body.Username+"'.", nil, "Incorrect password.")
 		return
 	}
 
@@ -81,7 +81,7 @@ func RemoveUser(w http.ResponseWriter, r *http.Request) {
 
 	if len(ownedServers) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' cannot be removed while owning servers "+fmt.Sprint(ownedServers)+".", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' cannot be removed while owning servers "+fmt.Sprint(ownedServers)+".", nil, "You cannot delete an account while owning servers " + fmt.Sprint(ownedServers))
 		return
 	}
 
@@ -122,14 +122,14 @@ func RemoveUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	core.Tokenless(w, "(INFO) User '"+body.Username+"' removed.", nil)
+	core.Tokenless(w, "(INFO) User '"+body.Username+"' removed.", nil, "")
 }
 
 func EditUser(w http.ResponseWriter, r *http.Request) {
 	newUsername, valid := core.ValidateName(r.PathValue("newname"), 3, 64)
 	if !valid {
 		w.WriteHeader(http.StatusBadRequest)
-		core.Tokenless(w, "(ERROR) Invalid username. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil)
+		core.Tokenless(w, "(ERROR) Invalid username. Must be 3-64 characters, letters/numbers/_-() and spaces only.", nil, "Usernames must be 3-64 characters and contain letters/numbers/_-() and spaces only.")
 		return
 	}
 
@@ -145,13 +145,13 @@ func EditUser(w http.ResponseWriter, r *http.Request) {
 
 	if newUsername == user.Name {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' already has username '"+newUsername+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' already has username '"+newUsername+"'.", nil, "That's already your username. Idiot.")
 		return
 	}
 
 	if _, exists := core.Users[newUsername]; exists {
 		w.WriteHeader(http.StatusConflict)
-		core.WithToken(w, user, "(ERROR) Username '"+newUsername+"' is already taken.", nil)
+		core.WithToken(w, user, "(ERROR) Username '"+newUsername+"' is already taken.", nil, "That user already exists.")
 		return
 	}
 
@@ -161,7 +161,7 @@ func EditUser(w http.ResponseWriter, r *http.Request) {
 	delete(core.Users, oldUsername)
 	core.Users[newUsername] = user
 
-	core.WithToken(w, user, "(INFO) User '"+oldUsername+"' name changed to '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) User '"+oldUsername+"' name changed to '"+user.Name+"'.", nil, "")
 }
 
 type ServerOrderRequest struct {
@@ -183,7 +183,7 @@ func SetServerOrder(w http.ResponseWriter, r *http.Request) {
 
 	user.ServerOrder = body.Order
 
-	core.WithToken(w, user, "(INFO) Server order updated for user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Server order updated for user '"+user.Name+"'.", nil, "")
 }
 
 func EditPassword(w http.ResponseWriter, r *http.Request) {
@@ -199,23 +199,23 @@ func EditPassword(w http.ResponseWriter, r *http.Request) {
 
 	if !core.CheckPassword(body.Password, user.Password) {
 		w.WriteHeader(http.StatusUnauthorized)
-		core.WithToken(w, user, "(ERROR) Incorrect password for user '"+user.Name+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Incorrect password for user '"+user.Name+"'.", nil, "Incorrect password.")
 		return
 	}
 
 	if len(body.NewPassword) < 8 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) New password must be at least 8 characters.", nil)
+		core.WithToken(w, user, "(ERROR) New password must be at least 8 characters.", nil, "Passwords must be at least 8 characters.")
 		return
 	}
 
 	if core.CheckPassword(body.NewPassword, user.Password) {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) New password must be different from current password.", nil)
+		core.WithToken(w, user, "(ERROR) New password must be different from current password.", nil, "That's already your password. Why are you even trying this?")
 		return
 	}
 
 	user.Password = core.HashPassword(body.NewPassword)
 
-	core.WithToken(w, user, "(INFO) Password changed for user '"+user.Name+"'.", nil)
+	core.WithToken(w, user, "(INFO) Password changed for user '"+user.Name+"'.", nil, "")
 }

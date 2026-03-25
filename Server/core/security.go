@@ -40,7 +40,7 @@ func GetUser(username string, token [32]byte, w http.ResponseWriter) (*User, boo
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		Tokenless(w, "(ERROR) Could not find user '"+username+"'.", nil)
+		Tokenless(w, "(ERROR) Could not find user '"+username+"'.", nil, username + " does not exist.")
 		return nil, false
 	}
 
@@ -55,7 +55,7 @@ func GetUser(username string, token [32]byte, w http.ResponseWriter) (*User, boo
 func ValidateUser(user *User, w http.ResponseWriter, token [32]byte) bool {
 	if !user.Active {
 		w.WriteHeader(http.StatusUnauthorized)
-		Tokenless(w, "(ERROR) User '"+user.Name+"' is not in an active session.", nil)
+		Tokenless(w, "(ERROR) User '"+user.Name+"' is not in an active session.", nil, user.Name + " is not logged in.")
 		return false
 	}
 
@@ -66,13 +66,13 @@ func ValidateUser(user *User, w http.ResponseWriter, token [32]byte) bool {
 
 	if !matchesCurrent && (isEmpty || !matchesPrev) {
 		w.WriteHeader(http.StatusUnauthorized)
-		Tokenless(w, "(ERROR) Invalid token provided.", nil)
+		Tokenless(w, "(ERROR) Invalid token provided.", nil, "Your session token is invalid. Try logging in again.")
 		return false
 	}
 
 	if time.Since(user.LastRequest) > 10*time.Minute {
 		w.WriteHeader(http.StatusUnauthorized)
-		Tokenless(w, "(ERROR) Session timed out for user '"+user.Name+"'.", nil)
+		Tokenless(w, "(ERROR) Session timed out for user '"+user.Name+"'.", nil, "The session timed out.")
 
 		user.Token = [32]byte{}
 		user.Active = false

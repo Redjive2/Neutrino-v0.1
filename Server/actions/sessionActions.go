@@ -18,20 +18,20 @@ func OpenSession(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.Tokenless(w, "(ERROR) Could not find user '"+username+"'.", nil)
+		core.Tokenless(w, "(ERROR) Could not find user '"+username+"'.", nil, username + " doesn't exist.")
 		return
 	}
 
 	if !core.CheckPassword(body.Password, user.Password) {
 		w.WriteHeader(http.StatusUnauthorized)
-		core.Tokenless(w, "(ERROR) Incorrect password for user '"+username+"'.", nil)
+		core.Tokenless(w, "(ERROR) Incorrect password for user '"+username+"'.", nil, "Incorrect password.")
 		return
 	}
 
 	user.LastRequest = time.Now()
 	user.Active = true
 
-	core.WithToken(w, user, "(INFO) Session opened for user '"+username+"'.", nil)
+	core.WithToken(w, user, "(INFO) Session opened for user '"+username+"'.", nil, "")
 }
 
 func CloseSession(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +44,7 @@ func CloseSession(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.Tokenless(w, "(ERROR) Could not find user '"+body.Username+"'.", nil)
+		core.Tokenless(w, "(ERROR) Could not find user '"+body.Username+"'.", nil, body.Username + " does not exist.")
 		return
 	}
 
@@ -56,5 +56,5 @@ func CloseSession(w http.ResponseWriter, r *http.Request) {
 	user.Token = [32]byte{}
 	user.Active = false
 
-	core.Tokenless(w, "(INFO) Session closed for user '"+body.Username+"'.", nil)
+	core.Tokenless(w, "(INFO) Session closed for user '"+body.Username+"'.", nil, "")
 }

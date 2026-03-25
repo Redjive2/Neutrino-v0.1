@@ -54,7 +54,7 @@ func GetManifest(w http.ResponseWriter, r *http.Request) {
 	core.WithToken(w, user, "(INFO) Manifest sent to '"+user.Name+"'.", ManifestData{
 		Servers:     serverList,
 		ServerOrder: user.ServerOrder,
-	})
+	}, "")
 }
 
 type ChannelInfo struct {
@@ -93,13 +93,13 @@ func GetServerData(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Cannot find server '"+serverId+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Cannot find server '"+serverId+"'.", nil, "That server doesn't exist.")
 		return
 	}
 
 	if !slices.Contains(server.Members, user) {
 		w.WriteHeader(http.StatusUnauthorized)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is unauthorized to access information for server '"+server.Name+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is unauthorized to access information for server '"+server.Name+"'.", nil, "You don't have access to this server.")
 		return
 	}
 
@@ -154,7 +154,7 @@ func GetServerData(w http.ResponseWriter, r *http.Request) {
 		Public:     server.Public,
 	}
 
-	core.WithToken(w, user, "(INFO) Data for server '"+serverId+"' sent to '"+user.Name+"'.", serverData)
+	core.WithToken(w, user, "(INFO) Data for server '"+serverId+"' sent to '"+user.Name+"'.", serverData, "")
 }
 
 type AttachmentInfo struct {
@@ -240,14 +240,14 @@ func GetChannelData(w http.ResponseWriter, r *http.Request) {
 		re := err.(core.ResolutionError)
 
 		w.WriteHeader(re.Status())
-		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil, "Could not find that channel.")
 
 		return
 	}
 
 	if !slices.Contains(channel.Members, user) {
 		w.WriteHeader(http.StatusUnauthorized)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is unauthorized to access information for channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is unauthorized to access information for channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "You don't have access to this channel.")
 		return
 	}
 
@@ -300,7 +300,7 @@ func GetChannelData(w http.ResponseWriter, r *http.Request) {
 		HasMore: hasMore,
 	}
 
-	core.WithToken(w, user, "(INFO) Data for channel '"+serverId+"/"+categoryName+":"+channelName+"' sent to '"+user.Name+"'.", channelData)
+	core.WithToken(w, user, "(INFO) Data for channel '"+serverId+"/"+categoryName+":"+channelName+"' sent to '"+user.Name+"'.", channelData, "")
 }
 
 func GetChatsSince(w http.ResponseWriter, r *http.Request) {
@@ -323,7 +323,7 @@ func GetChatsSince(w http.ResponseWriter, r *http.Request) {
 
 	if lastIdParseErr != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Message ID '"+lastIdString+"' could not be parsed.", nil)
+		core.WithToken(w, user, "(ERROR) Message ID '"+lastIdString+"' could not be parsed.", nil, "Invalid message ID.")
 		return
 	}
 
@@ -332,7 +332,7 @@ func GetChatsSince(w http.ResponseWriter, r *http.Request) {
 		re := err.(core.ResolutionError)
 
 		w.WriteHeader(re.Status())
-		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil, "Could not find that channel.")
 
 		return
 	}
@@ -343,7 +343,7 @@ func GetChatsSince(w http.ResponseWriter, r *http.Request) {
 
 	if index == -1 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Could not find message #"+lastIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not find message #"+lastIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "That message doesn't exist.")
 		return
 	}
 
@@ -368,15 +368,33 @@ func GetChatsSince(w http.ResponseWriter, r *http.Request) {
 		members[i] = member.Name
 	}
 
+	// Include current reactions for all existing messages so the client can
+	// sync reaction changes without a separate fetch.
+	type ReactionSnapshot struct {
+		Id        int            `json:"id"`
+		Reactions []ReactionData `json:"reactions"`
+	}
+
+	existingMessages := channel.History[index:]
+	reactionUpdates := make([]ReactionSnapshot, len(existingMessages))
+	for i, msg := range existingMessages {
+		reactionUpdates[i] = ReactionSnapshot{
+			Id:        msg.Id,
+			Reactions: resolveReactions(msg.Reactions),
+		}
+	}
+
 	type ChatsSinceData struct {
-		Messages []MessageData `json:"messages"`
-		Members  []string      `json:"members"`
+		Messages        []MessageData    `json:"messages"`
+		Members         []string         `json:"members"`
+		ReactionUpdates []ReactionSnapshot `json:"reactionUpdates"`
 	}
 
 	core.WithToken(w, user, "(INFO) Chats since #"+lastIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"' sent to '"+user.Name+"'.", ChatsSinceData{
-		Messages: messagesData,
-		Members:  members,
-	})
+		Messages:        messagesData,
+		Members:         members,
+		ReactionUpdates: reactionUpdates,
+	}, "")
 }
 
 type NamedRequest struct {
@@ -392,7 +410,7 @@ func GetSessionStatus(w http.ResponseWriter, r *http.Request) {
 	user, found := core.Users[body.Username]
 	if !found {
 		w.WriteHeader(http.StatusNotFound)
-		core.Tokenless(w, "(ERROR) User '"+body.Username+"' does not exist.", nil)
+		core.Tokenless(w, "(ERROR) User '"+body.Username+"' does not exist.", nil, body.Username+" doesn't exist.")
 		return
 	}
 
@@ -402,7 +420,7 @@ func GetSessionStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := Status{Active: user.Active, ProfilePic: user.ProfilePic}
-	core.Tokenless(w, "(INFO) Returning session status for user '"+body.Username+"'.", status)
+	core.Tokenless(w, "(INFO) Returning session status for user '"+body.Username+"'.", status, "")
 }
 
 func resolveAttachments(ids []string) []AttachmentInfo {

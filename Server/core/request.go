@@ -51,7 +51,7 @@ func MustParse[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 	body, err := Parse[T](r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		Tokenless(w, "(ERROR) Malformed request body: "+err.Error(), nil)
+		Tokenless(w, "(ERROR) Malformed request body: "+err.Error(), nil, "The request was malformed or incomplete.")
 		return body, false
 	}
 	return body, true

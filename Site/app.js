@@ -135,6 +135,17 @@ function tokenToHex(token) {
   return token.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Toast notifications
+function showToast(message, type = 'error') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast' + (type === 'success' ? ' success' : '');
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 6000);
+  toast.addEventListener('click', () => toast.remove());
+}
+
 // Custom prompt modal — async replacement for window.prompt().
 // Options: { defaultValue, password }
 function showPrompt(message, opts = {}) {
@@ -148,17 +159,19 @@ function showPrompt(message, opts = {}) {
     msgEl.textContent = message;
     input.type = opts.password ? 'password' : 'text';
     input.value = opts.defaultValue || '';
+    input.style.display = opts.confirm ? 'none' : '';
     overlay.classList.add('open');
-    input.focus();
+    if (opts.confirm) okBtn.focus(); else input.focus();
 
     function cleanup() {
       overlay.classList.remove('open');
+      input.style.display = '';
       okBtn.removeEventListener('click', onOk);
       cancelBtn.removeEventListener('click', onCancel);
-      input.removeEventListener('keydown', onKey);
+      overlay.removeEventListener('keydown', onKey);
     }
-    function onOk() { cleanup(); resolve(input.value); }
-    function onCancel() { cleanup(); resolve(null); }
+    function onOk() { cleanup(); resolve(opts.confirm ? true : input.value); }
+    function onCancel() { cleanup(); resolve(opts.confirm ? false : null); }
     function onKey(e) {
       if (e.key === 'Enter') onOk();
       else if (e.key === 'Escape') onCancel();
@@ -166,8 +179,12 @@ function showPrompt(message, opts = {}) {
 
     okBtn.addEventListener('click', onOk);
     cancelBtn.addEventListener('click', onCancel);
-    input.addEventListener('keydown', onKey);
+    overlay.addEventListener('keydown', onKey);
   });
+}
+
+function showConfirm(message) {
+  return showPrompt(message, { confirm: true });
 }
 
 
@@ -244,6 +261,10 @@ async function _apiPost(path, body) {
       }
     }
 
+    if (!res.ok && data && data.hasUserMessage) {
+      showToast(data.userMessage);
+    }
+
     return { ok: res.ok, status: res.status, data };
   } catch {
     return { ok: false, status: 0, data: null };
@@ -269,6 +290,10 @@ async function _apiUpload(file) {
     if (data.carriesToken && session) {
       session.token = data.newToken;
       saveSession();
+    }
+
+    if (!res.ok && data && data.hasUserMessage) {
+      showToast(data.userMessage);
     }
 
     return { ok: res.ok, status: res.status, data };
@@ -408,7 +433,7 @@ async function fetchNewMessages(server, category, channel, sinceId) {
   );
   if (!ok) return null;
   const d = data.data || {};
-  return { messages: d.messages || [], members: d.members || [] };
+  return { messages: d.messages || [], members: d.members || [], reactionUpdates: d.reactionUpdates || [] };
 }
 
 function applyServerOrder(servers) {
@@ -451,9 +476,13 @@ async function login(username, password) {
     body: JSON.stringify({ password }),
   });
 
-  if (!res.ok) return false;
+  const data = await res.json().catch(() => null);
 
-  const data = await res.json();
+  if (!res.ok) {
+    if (data && data.hasUserMessage) showToast(data.userMessage);
+    return false;
+  }
+
   session = { username, token: data.newToken };
   saveSession();
   return true;
@@ -465,7 +494,14 @@ async function register(username, password) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password }),
   });
-  return res.ok;
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    if (data && data.hasUserMessage) showToast(data.userMessage);
+    return false;
+  }
+
+  return true;
 }
 
 async function logout() {
@@ -820,9 +856,9 @@ function renderChannelSidebar(serverData) {
   // Remove category
 
   list.querySelectorAll('.remove-cat-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', async e => {
       e.stopPropagation();
-      if (confirm(`Delete category "${btn.dataset.category}" and all its channels?`)) {
+      if (await showConfirm(`Delete category "${btn.dataset.category}" and all its channels?`)) {
         removeCategory(btn.dataset.category);
       }
     });
@@ -849,9 +885,9 @@ function renderChannelSidebar(serverData) {
   // Remove channel
 
   list.querySelectorAll('.remove-channel-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', async e => {
       e.stopPropagation();
-      if (confirm(`Delete channel #${btn.dataset.channel}?`)) {
+      if (await showConfirm(`Delete channel #${btn.dataset.channel}?`)) {
         removeChannel(btn.dataset.category, btn.dataset.channel);
       }
     });
@@ -911,7 +947,7 @@ async function promptCreateCategory() {
   if (!name || !name.trim()) return;
 
   const { ok } = await apiPost(`/new/category/${enc(currentServer)}/${enc(name.trim())}`, authBody());
-  if (!ok) { alert('Could not create category.'); return; }
+  if (!ok) return;
 
   const data = await fetchServerData(currentServer);
   renderChannelSidebar(data);
@@ -925,7 +961,7 @@ async function promptCreateChannel(categoryName) {
     `/new/channel/${enc(currentServer)}/${enc(categoryName)}/${enc(name.trim())}`,
     authBody()
   );
-  if (!ok) { alert('Could not create channel.'); return; }
+  if (!ok) return;
 
   const data = await fetchServerData(currentServer);
   renderChannelSidebar(data);
@@ -933,7 +969,7 @@ async function promptCreateChannel(categoryName) {
 
 async function removeCategory(categoryName) {
   const { ok } = await apiPost(`/remove/category/${enc(currentServer)}/${enc(categoryName)}`, authBody());
-  if (!ok) { alert('Could not delete category.'); return; }
+  if (!ok) return;
 
   if (currentCategory === categoryName) {
     currentCategory = null;
@@ -954,7 +990,7 @@ async function removeChannel(categoryName, channelName) {
     `/remove/channel/${enc(currentServer)}/${enc(categoryName)}/${enc(channelName)}`,
     authBody()
   );
-  if (!ok) { alert('Could not delete channel.'); return; }
+  if (!ok) return;
 
   if (currentChannel === channelName && currentCategory === categoryName) {
     currentCategory = null;
@@ -980,7 +1016,7 @@ async function renameServer() {
     `/edit/server/${enc(currentServer)}/${enc(name.trim())}`,
     authBody()
   );
-  if (!ok) { alert('Could not rename server.'); return; }
+  if (!ok) return;
 
   currentServerName = name.trim();
   document.querySelector('.server-name').textContent = currentServerName;
@@ -1002,7 +1038,7 @@ async function renameCategory(categoryName) {
     `/edit/category/${enc(currentServer)}/${enc(categoryName)}/${enc(name.trim())}`,
     authBody()
   );
-  if (!ok) { alert('Could not rename category.'); return; }
+  if (!ok) return;
 
   if (currentCategory === categoryName) {
     currentCategory = name.trim();
@@ -1020,7 +1056,7 @@ async function renameChannel(categoryName, channelName) {
     `/edit/channel/${enc(currentServer)}/${enc(categoryName)}/${enc(channelName)}/${enc(name.trim())}`,
     authBody()
   );
-  if (!ok) { alert('Could not rename channel.'); return; }
+  if (!ok) return;
 
   if (currentChannel === channelName && currentCategory === categoryName) {
     currentChannel = name.trim();
@@ -1034,20 +1070,20 @@ async function renameChannel(categoryName, channelName) {
 
 async function deleteServer() {
   if (!currentServer) return;
-  if (!confirm(`Delete server "${currentServerName || currentServer}"? This cannot be undone.`)) return;
+  if (!await showConfirm(`Delete server "${currentServerName || currentServer}"? This cannot be undone.`)) return;
 
   const { ok } = await apiPost(`/remove/server/${enc(currentServer)}`, authBody());
-  if (!ok) { alert('Could not delete server. You may not be the owner.'); return; }
+  if (!ok) return;
 
   await recoverFromServerLoss();
 }
 
 async function leaveServer() {
   if (!currentServer) return;
-  if (!confirm(`Leave server "${currentServerName || currentServer}"?`)) return;
+  if (!await showConfirm(`Leave server "${currentServerName || currentServer}"?`)) return;
 
   const { ok } = await apiPost(`/leave/server/${enc(currentServer)}`, authBody());
-  if (!ok) { alert('Could not leave server.'); return; }
+  if (!ok) return;
 
   await recoverFromServerLoss();
 }
@@ -1057,7 +1093,7 @@ async function deleteMessage(msgId) {
     `/remove/message/${enc(currentServer)}/${enc(currentCategory)}/${enc(currentChannel)}/${msgId}`,
     authBody()
   );
-  if (!ok) { alert('Could not delete message.'); return; }
+  if (!ok) return;
 
   renderedMessages = renderedMessages.filter(m => m.id !== msgId);
   rebuildDOM();
@@ -1300,8 +1336,6 @@ async function addUserToChannel(username) {
       currentChannelMembers = data.members || [];
       await renderMemberList(currentChannelMembers);
     }
-  } else {
-    alert('Could not add user to channel.');
   }
 }
 
@@ -1328,9 +1362,6 @@ async function inviteToServer() {
         }
       }
     }
-  } else {
-    const msg = (data && data.message) || 'Could not invite user.';
-    alert(msg);
   }
 }
 
@@ -1338,17 +1369,17 @@ async function kickFromServer() {
   if (!currentServer) return;
 
   const kickable = currentServerMembers.filter(m => m !== session.username && m !== currentServerOwner);
-  if (kickable.length === 0) { alert('No members to kick.'); return; }
+  if (kickable.length === 0) { showToast('No members to kick.'); return; }
 
   const username = await showPrompt('Username to kick:\n\nMembers: ' + kickable.join(', '));
   if (!username || !username.trim()) return;
 
   if (!kickable.includes(username.trim())) {
-    alert('User is not a kickable member of this server.');
+    showToast('User is not a kickable member of this server.');
     return;
   }
 
-  if (!confirm(`Kick ${username.trim()} from this server? They will be removed from all channels.`)) return;
+  if (!await showConfirm(`Kick ${username.trim()} from this server? They will be removed from all channels.`)) return;
 
   const { ok, data } = await apiPost(
     `/kick/server/${enc(username.trim())}/${enc(currentServer)}`,
@@ -1367,9 +1398,6 @@ async function kickFromServer() {
         }
       }
     }
-  } else {
-    const msg = (data && data.message) || 'Could not kick user.';
-    alert(msg);
   }
 }
 
@@ -1385,8 +1413,6 @@ async function kickUserFromChannel(username) {
       currentChannelMembers = data.members || [];
       await renderMemberList(currentChannelMembers);
     }
-  } else {
-    alert('Could not kick user.');
   }
 }
 
@@ -1402,11 +1428,11 @@ async function changeProfilePic() {
     if (!input.files || !input.files[0]) return;
 
     const result = await apiUpload(input.files[0]);
-    if (!result.ok) { alert('Could not upload image.'); return; }
+    if (!result.ok) return;
 
     const id = result.data.data.id;
     const { ok } = await apiPost(`/edit/profilepic/${id}`, authBody());
-    if (!ok) { alert('Could not set profile picture.'); return; }
+    if (!ok) return;
 
     session.profilePic = id;
     saveSession();
@@ -1428,11 +1454,11 @@ async function changeServerThumbnail() {
     if (!input.files || !input.files[0]) return;
 
     const result = await apiUpload(input.files[0]);
-    if (!result.ok) { alert('Could not upload image.'); return; }
+    if (!result.ok) return;
 
     const id = result.data.data.id;
     const { ok } = await apiPost(`/edit/thumbnail/${enc(currentServer)}/${id}`, authBody());
-    if (!ok) { alert('Could not set server thumbnail. You must be the server owner.'); return; }
+    if (!ok) return;
 
     serverThumbnailCache.set(currentServer, id);
 
@@ -1450,15 +1476,12 @@ async function handleFilesSelected(files) {
 
   for (const file of files) {
     if (pendingAttachments.length >= 10) {
-      alert('Maximum 10 attachments per message.');
+      showToast('Maximum 10 attachments per message.');
       break;
     }
 
     const result = await apiUpload(file);
-    if (!result.ok) {
-      alert(result.data && result.data.message ? result.data.message : 'Upload failed.');
-      continue;
-    }
+    if (!result.ok) continue;
 
     pendingAttachments.push({
       id: result.data.data.id,
@@ -1476,7 +1499,7 @@ async function changeUsername() {
   if (!newName || !newName.trim()) return;
 
   const { ok } = await apiPost(`/edit/user/${enc(newName.trim())}`, authBody());
-  if (!ok) { alert('Could not change username. It may already be taken.'); return; }
+  if (!ok) return;
 
   session.username = newName.trim();
   saveSession();
@@ -1491,9 +1514,9 @@ async function changePassword() {
   if (!newPass) return;
 
   const { ok } = await apiPost('/edit/password', authBody({ password: current, newPassword: newPass }));
-  if (!ok) { alert('Could not change password. Current password may be wrong.'); return; }
+  if (!ok) return;
 
-  alert('Password changed.');
+  showToast('Password changed.', 'success');
 }
 
 async function deleteAccount() {
@@ -1509,8 +1532,6 @@ async function deleteAccount() {
   if (ok) {
     clearSession();
     location.reload();
-  } else {
-    alert('Could not delete account. You may still own servers, or the password is wrong.');
   }
 }
 
@@ -1701,7 +1722,13 @@ async function poll() {
   if (!session || !currentServer) return;
   const gen = navGeneration;
 
-  const serverData = await fetchServerData(currentServer);
+  // Fire server data and message data requests in parallel
+  const serverDataPromise = fetchServerData(currentServer);
+  const messagePromise = currentChannel && lastSeenId >= 0
+    ? fetchNewMessages(currentServer, currentCategory, currentChannel, lastSeenId)
+    : null;
+
+  const serverData = await serverDataPromise;
   if (!session || gen !== navGeneration) return;
 
   if (!serverData || !serverData.members || !serverData.members.includes(session.username)) {
@@ -1807,7 +1834,8 @@ async function poll() {
     return;
   }
 
-  const result = await fetchNewMessages(currentServer, currentCategory, currentChannel, lastSeenId);
+  // Await the message fetch that was started in parallel with the server fetch
+  const result = await messagePromise;
   if (!session || gen !== navGeneration) return;
 
   if (result === null) {
@@ -1815,14 +1843,29 @@ async function poll() {
     return;
   }
 
+  let needsRebuild = false;
+
   if (result.messages.length > 0) {
     lastSeenId = result.messages[0].id;
     await ensureProfilePics(result.messages.map(m => m.from));
 
     const toAdd = [...result.messages].reverse().map(toDisplayMessage);
     renderedMessages.push(...toAdd);
-    rebuildDOM();
+    needsRebuild = true;
   }
+
+  // Sync reactions on existing messages
+  for (const update of result.reactionUpdates) {
+    const msg = renderedMessages.find(m => m.id === update.id);
+    if (!msg) continue;
+    const newJson = JSON.stringify(update.reactions);
+    if (JSON.stringify(msg.reactions) !== newJson) {
+      msg.reactions = update.reactions;
+      needsRebuild = true;
+    }
+  }
+
+  if (needsRebuild) rebuildDOM();
 
   // Sync channel members (included in the chat-since response)
   if (JSON.stringify(result.members) !== JSON.stringify(currentChannelMembers)) {
@@ -2003,7 +2046,7 @@ async function sendMessage(text) {
   if (!currentServer || !currentChannel) return;
 
   if (text.trim().length > 2048) {
-    alert('Message cannot exceed 2048 characters.');
+    showToast('Message cannot exceed 2048 characters.');
     return;
   }
 
@@ -2478,7 +2521,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const delBtn = e.target.closest('.msg-delete-btn');
     if (delBtn) {
-      if (!confirm('Delete this message?')) return;
+      if (!await showConfirm('Delete this message?')) return;
       const msgId = parseInt(delBtn.dataset.msgId);
       if (!isNaN(msgId)) await deleteMessage(msgId);
       return;
@@ -2496,7 +2539,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('members-sidebar').addEventListener('click', async e => {
     const kickBtn = e.target.closest('.kick-btn');
     if (kickBtn) {
-      if (confirm(`Kick ${kickBtn.dataset.username} from #${currentChannel}?`)) {
+      if (await showConfirm(`Kick ${kickBtn.dataset.username} from #${currentChannel}?`)) {
         await kickUserFromChannel(kickBtn.dataset.username);
       }
       return;
@@ -2571,9 +2614,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     changePassword();
   });
 
-  document.getElementById('logout-btn').addEventListener('click', () => {
+  document.getElementById('logout-btn').addEventListener('click', async () => {
     accountMenu.classList.remove('open');
-    if (confirm('Log out of Neutrino?')) logout();
+    if (await showConfirm('Log out of Neutrino?')) logout();
   });
 
   document.getElementById('delete-account-btn').addEventListener('click', () => {
@@ -2606,7 +2649,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!currentServer) return;
 
     const { ok } = await apiPost(`/edit/thumbnail/${enc(currentServer)}/none`, authBody());
-    if (!ok) { alert('Could not remove thumbnail. You must be the server owner.'); return; }
+    if (!ok) return;
 
     serverThumbnailCache.set(currentServer, null);
 
@@ -2638,7 +2681,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const newPublic = !currentServerPublic;
     const { ok } = await apiPost(`/edit/visibility/${enc(currentServer)}`, authBody({ public: newPublic }));
-    if (!ok) { alert('Could not change server visibility.'); return; }
+    if (!ok) return;
 
     currentServerPublic = newPublic;
     updateVisibilityBtn();
@@ -2656,7 +2699,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!name || !name.trim()) return;
 
     const result = await apiPost(`/new/server/${enc(name.trim())}`, authBody());
-    if (!result.ok) { alert('Could not create server.'); return; }
+    if (!result.ok) return;
 
     const newId = result.data && result.data.data && result.data.data.id;
     const servers = await fetchMyServers();

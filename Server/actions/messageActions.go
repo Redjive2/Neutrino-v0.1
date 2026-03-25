@@ -48,27 +48,27 @@ func ReactMessage(w http.ResponseWriter, r *http.Request) {
 		re := err.(core.ResolutionError)
 
 		w.WriteHeader(re.Status())
-		core.WithToken(w, user, "(ERROR) Could not resolve channel at path '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not resolve channel at path '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil, "Could not find that channel.")
 
 		return
 	}
-	
+
 	if parseErr != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Message ID '"+targetMessageIdString+"' could not be parsed.", nil)
+		core.WithToken(w, user, "(ERROR) Message ID '"+targetMessageIdString+"' could not be parsed.", nil, "Invalid message ID.")
 		return
 	}
 
 	index := slices.IndexFunc(channel.History, func(m *core.Message) bool {
 		return m.Id == targetMessageId
 	})
-	
+
 	if index == -1 {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Could not find message #"+targetMessageIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not find message #"+targetMessageIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "That message doesn't exist.")
 		return
 	}
-	
+
 	message := channel.History[index]
 
 	userAlreadyReacted := slices.ContainsFunc(message.Reactions, func(react core.Reaction) bool {
@@ -77,7 +77,7 @@ func ReactMessage(w http.ResponseWriter, r *http.Request) {
 
 	if userAlreadyReacted {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' has already reacted to message #"+targetMessageIdString+".", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' has already reacted to message #"+targetMessageIdString+".", nil, "You've already reacted to this message.")
 		return
 	}
 
@@ -86,7 +86,7 @@ func ReactMessage(w http.ResponseWriter, r *http.Request) {
 		Content: body.Content,
 	})
 
-	core.WithToken(w, user, "(INFO) User '"+user.Name+"' added reaction '"+body.Content+"' to message #"+targetMessageIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+	core.WithToken(w, user, "(INFO) User '"+user.Name+"' added reaction '"+body.Content+"' to message #"+targetMessageIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "")
 }
 
 func RemoveReaction(w http.ResponseWriter, r *http.Request) {
@@ -115,27 +115,27 @@ func RemoveReaction(w http.ResponseWriter, r *http.Request) {
 		re := err.(core.ResolutionError)
 
 		w.WriteHeader(re.Status())
-		core.WithToken(w, user, "(ERROR) Could not resolve channel at path '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not resolve channel at path '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil, "Could not find that channel.")
 
 		return
 	}
-	
+
 	if parseErr != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Message ID '"+targetMessageIdString+"' could not be parsed.", nil)
+		core.WithToken(w, user, "(ERROR) Message ID '"+targetMessageIdString+"' could not be parsed.", nil, "Invalid message ID.")
 		return
 	}
 
 	index := slices.IndexFunc(channel.History, func(m *core.Message) bool {
 		return m.Id == targetMessageId
 	})
-	
+
 	if index == -1 {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Could not find message #"+targetMessageIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not find message #"+targetMessageIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "That message doesn't exist.")
 		return
 	}
-	
+
 	message := channel.History[index]
 
 	reactionIndex := slices.IndexFunc(message.Reactions, func(react core.Reaction) bool {
@@ -144,13 +144,13 @@ func RemoveReaction(w http.ResponseWriter, r *http.Request) {
 
 	if reactionIndex == -1 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' has not reacted to message #"+targetMessageIdString+".", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' has not reacted to message #"+targetMessageIdString+".", nil, "You haven't reacted to this message.")
 		return
 	}
 
 	message.Reactions = slices.Concat(message.Reactions[:reactionIndex], message.Reactions[reactionIndex+1:])
 
-	core.WithToken(w, user, "(INFO) User '"+user.Name+"' removed their reaction from message #"+targetMessageIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+	core.WithToken(w, user, "(INFO) User '"+user.Name+"' removed their reaction from message #"+targetMessageIdString+" in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "")
 }
 
 func CreateMessage(w http.ResponseWriter, r *http.Request) {
@@ -170,26 +170,26 @@ func CreateMessage(w http.ResponseWriter, r *http.Request) {
 
 	if len(body.Content) == 0 && len(body.Attachments) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Message must have content or at least one attachment.", nil)
+		core.WithToken(w, user, "(ERROR) Message must have content or at least one attachment.", nil, "Messages need content or an attachment.")
 		return
 	}
 
 	if len(body.Content) > 2048 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Message content exceeds 2048 character limit.", nil)
+		core.WithToken(w, user, "(ERROR) Message content exceeds 2048 character limit.", nil, "Message is too long (max 2048 characters).")
 		return
 	}
 
 	if len(body.Attachments) > maxAttachments {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Too many attachments (max 10).", nil)
+		core.WithToken(w, user, "(ERROR) Too many attachments (max 10).", nil, "Too many attachments (max 10).")
 		return
 	}
 
 	for _, aid := range body.Attachments {
 		if _, found := core.MediaItems[aid]; !found {
 			w.WriteHeader(http.StatusBadRequest)
-			core.WithToken(w, user, "(ERROR) Attachment '"+aid+"' not found.", nil)
+			core.WithToken(w, user, "(ERROR) Attachment '"+aid+"' not found.", nil, "One of your attachments couldn't be found.")
 			return
 		}
 	}
@@ -200,7 +200,7 @@ func CreateMessage(w http.ResponseWriter, r *http.Request) {
 		re := err.(core.ResolutionError)
 
 		w.WriteHeader(re.Status())
-		core.WithToken(w, user, "(ERROR) Could not resolve channel at path '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not resolve channel at path '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil, "Could not find that channel.")
 
 		return
 	}
@@ -212,7 +212,7 @@ func CreateMessage(w http.ResponseWriter, r *http.Request) {
 		})
 		if idx == -1 {
 			w.WriteHeader(http.StatusNotFound)
-			core.WithToken(w, user, "(ERROR) Reply target message #"+strconv.Itoa(*body.ReplyTo)+" not found in channel.", nil)
+			core.WithToken(w, user, "(ERROR) Reply target message #"+strconv.Itoa(*body.ReplyTo)+" not found in channel.", nil, "The message you're replying to doesn't exist.")
 			return
 		}
 		replyTarget = channel.History[idx]
@@ -236,7 +236,7 @@ func CreateMessage(w http.ResponseWriter, r *http.Request) {
 	channel.History = slices.Concat([]*core.Message{message}, channel.History)
 
 	w.WriteHeader(http.StatusCreated)
-	core.WithToken(w, user, "(INFO) Message #"+strconv.Itoa(message.Id)+" from user '"+user.Name+"' created.", message.Id)
+	core.WithToken(w, user, "(INFO) Message #"+strconv.Itoa(message.Id)+" from user '"+user.Name+"' created.", message.Id, "")
 }
 
 func EditMessage(w http.ResponseWriter, r *http.Request) {
@@ -258,13 +258,13 @@ func EditMessage(w http.ResponseWriter, r *http.Request) {
 
 	if idParseError != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Message ID '"+idString+"' could not be parsed.", nil)
+		core.WithToken(w, user, "(ERROR) Message ID '"+idString+"' could not be parsed.", nil, "Invalid message ID.")
 		return
 	}
 
 	if len(body.Content) > 2048 {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Message content exceeds 2048 character limit.", nil)
+		core.WithToken(w, user, "(ERROR) Message content exceeds 2048 character limit.", nil, "Message is too long (max 2048 characters).")
 		return
 	}
 
@@ -274,7 +274,7 @@ func EditMessage(w http.ResponseWriter, r *http.Request) {
 		re := err.(core.ResolutionError)
 
 		w.WriteHeader(re.Status())
-		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil, "Could not find that channel.")
 
 		return
 	}
@@ -285,7 +285,7 @@ func EditMessage(w http.ResponseWriter, r *http.Request) {
 
 	if index == -1 {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Could not find message #"+idString+" from user '"+user.Name+"' in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not find message #"+idString+" from user '"+user.Name+"' in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "That message doesn't exist.")
 		return
 	}
 
@@ -294,13 +294,13 @@ func EditMessage(w http.ResponseWriter, r *http.Request) {
 
 	if user != message.From && user != server.Owner {
 		w.WriteHeader(http.StatusUnauthorized)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to edit message #"+idString+" from user '"+message.From.Name+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to edit message #"+idString+" from user '"+message.From.Name+"'.", nil, "You don't have permission to edit that message.")
 		return
 	}
 
 	channel.History[index].Content = body.Content
 
-	core.WithToken(w, user, "(INFO) Message #"+idString+" from user '"+user.Name+"' edited.", nil)
+	core.WithToken(w, user, "(INFO) Message #"+idString+" from user '"+user.Name+"' edited.", nil, "")
 }
 
 func RemoveMessage(w http.ResponseWriter, r *http.Request) {
@@ -322,7 +322,7 @@ func RemoveMessage(w http.ResponseWriter, r *http.Request) {
 
 	if idParseError != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		core.WithToken(w, user, "(ERROR) Message ID '"+idString+"' could not be parsed.", nil)
+		core.WithToken(w, user, "(ERROR) Message ID '"+idString+"' could not be parsed.", nil, "Invalid message ID.")
 		return
 	}
 
@@ -332,7 +332,7 @@ func RemoveMessage(w http.ResponseWriter, r *http.Request) {
 		re := err.(core.ResolutionError)
 
 		w.WriteHeader(re.Status())
-		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not resolve channel '"+serverId+"/"+categoryName+":"+channelName+"'; got resolution error '"+err.Error()+"'.", nil, "Could not find that channel.")
 
 		return
 	}
@@ -343,7 +343,7 @@ func RemoveMessage(w http.ResponseWriter, r *http.Request) {
 
 	if index == -1 {
 		w.WriteHeader(http.StatusNotFound)
-		core.WithToken(w, user, "(ERROR) Could not find message #"+idString+" from user '"+user.Name+"' in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil)
+		core.WithToken(w, user, "(ERROR) Could not find message #"+idString+" from user '"+user.Name+"' in channel '"+serverId+"/"+categoryName+":"+channelName+"'.", nil, "That message doesn't exist.")
 		return
 	}
 
@@ -352,7 +352,7 @@ func RemoveMessage(w http.ResponseWriter, r *http.Request) {
 
 	if user != message.From && user != server.Owner {
 		w.WriteHeader(http.StatusUnauthorized)
-		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to remove message #"+idString+" from user '"+message.From.Name+"'.", nil)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to remove message #"+idString+" from user '"+message.From.Name+"'.", nil, "You don't have permission to delete that message.")
 		return
 	}
 
@@ -366,5 +366,5 @@ func RemoveMessage(w http.ResponseWriter, r *http.Request) {
 		message.From.Messages = slices.Concat(message.From.Messages[:userIdx], message.From.Messages[userIdx+1:])
 	}
 
-	core.WithToken(w, user, "(INFO) Message #"+idString+" from user '"+user.Name+"' removed.", nil)
+	core.WithToken(w, user, "(INFO) Message #"+idString+" from user '"+user.Name+"' removed.", nil, "")
 }

@@ -8,18 +8,22 @@ import (
 )
 
 type ServerResponse struct {
-	Message      string   `json:"message"`
-	Data         any      `json:"data"`
-	NewToken     [32]byte `json:"newToken"`
-	CarriesToken bool     `json:"carriesToken"`
+	Message        string   `json:"message"`
+	Data           any      `json:"data"`
+	NewToken       [32]byte `json:"newToken"`
+	CarriesToken   bool     `json:"carriesToken"`
+	UserMessage    string   `json:"userMessage"`
+	HasUserMessage bool     `json:"hasUserMessage"`
 }
 
-func Tokenless(w http.ResponseWriter, message string, data any) {
+func Tokenless(w http.ResponseWriter, message string, data any, userMessage string) {
 	bytes, err := json.Marshal(ServerResponse{
-		Message:      message,
-		Data:         data,
-		NewToken:     [32]byte{},
-		CarriesToken: false,
+		Message:        message,
+		Data:           data,
+		NewToken:       [32]byte{},
+		CarriesToken:   false,
+		UserMessage:    userMessage,
+		HasUserMessage: userMessage != "",
 	})
 
 	if err != nil {
@@ -33,14 +37,16 @@ func Tokenless(w http.ResponseWriter, message string, data any) {
 	w.Write(bytes)
 }
 
-func WithToken(w http.ResponseWriter, user *User, message string, data any) {
+func WithToken(w http.ResponseWriter, user *User, message string, data any, userMessage string) {
 	token := NewToken()
 
 	bytes, err := json.Marshal(ServerResponse{
-		Message:      message,
-		Data:         data,
-		NewToken:     token,
-		CarriesToken: true,
+		Message:        message,
+		Data:           data,
+		NewToken:       token,
+		CarriesToken:   true,
+		UserMessage:    userMessage,
+		HasUserMessage: userMessage != "",
 	})
 
 	if err != nil {
