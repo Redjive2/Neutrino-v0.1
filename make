@@ -16,8 +16,17 @@ if [[ $1 == "help" ]]; then
     echo "| -> supervise <port> : Build and run the supervisor for the current env. on the port given.         |"
     echo "| -> pull             : Runs git stash & git pull.                                                   |"
     echo "| -> update           : Updates the remote supervisor.                                               |"
+    echo "| -> empty            : Deletes all stored user data.                                                |"
     echo "[----------------------------------------------------------------------------------------------------]"
     exit 0
+fi
+
+if [[ $1 == "empty" ]]; then
+    echo "" > Server/data/snapshot.json
+    echo "" > Server/data/backup.json
+    rm -rf Server/data/media
+    mkdir Server/data/media
+    exit 0  
 fi
 
 if [[ $1 == "clean" ]]; then
