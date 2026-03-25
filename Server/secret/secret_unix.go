@@ -1,3 +1,5 @@
+//go:build !windows
+
 package secret
 
 import (
@@ -7,8 +9,8 @@ import (
 
 var SupervisorPassword string
 
-func Load(path string) error {
-	data, err := os.ReadFile(path)
+func Load() error {
+	data, err := os.ReadFile("~/neutrino_admin_pass.key")
 	if err != nil {
 		return err
 	}

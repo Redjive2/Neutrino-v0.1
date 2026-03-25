@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"neutrino/actions"
 	"neutrino/core"
-	"neutrino/media"
 	"neutrino/secret"
+	"neutrino/media"
 	"neutrino/serial"
 	"os"
 	"os/signal"
@@ -32,7 +32,7 @@ func main() {
 
 	fmt.Println("[" + fmt.Sprint(time.Now()) + "]  Initializing server.")
 
-	if err := secret.Load("~/neutrino_admin_pass.key"); err != nil {
+	if err := secret.Load(); err != nil {
 		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  FATAL: could not load supervisor key: " + err.Error())
 		return
 	}

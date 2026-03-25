@@ -18,12 +18,33 @@ const (
 var (
 	idPattern    = regexp.MustCompile(`^[0-9a-f]{32}$`)
 	AllowedTypes = map[string]bool{
-		"image/png":  true,
-		"image/jpeg": true,
-		"image/gif":  true,
-		"image/webp": true,
+		// Images
+		"image/png":     true,
+		"image/jpeg":    true,
+		"image/gif":     true,
+		"image/webp":    true,
+		"image/svg+xml": true,
+		"image/bmp":     true,
+		"image/tiff":    true,
+		"image/avif":    true,
+		// Video
 		"video/mp4":  true,
 		"video/webm": true,
+		"video/ogg":  true,
+		// Audio
+		"audio/mpeg":    true,
+		"audio/ogg":     true,
+		"audio/wav":     true,
+		"audio/webm":    true,
+		"audio/flac":    true,
+		"audio/aac":     true,
+		"audio/mp4":     true,
+		// Documents
+		"application/pdf":  true,
+		"text/plain":       true,
+		"text/csv":         true,
+		"application/json": true,
+		"application/zip":  true,
 	}
 )
 
