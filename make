@@ -17,6 +17,7 @@ if [[ $1 == "help" ]]; then
     echo "| -> pull             : Runs git stash & git pull.                                                   |"
     echo "| -> update           : Updates the remote supervisor.                                               |"
     echo "[----------------------------------------------------------------------------------------------------]"
+    exit 0
 fi
 
 if [[ $1 == "clean" ]]; then
@@ -65,6 +66,5 @@ if [[ $1 == "update" ]]; then
     curl -X POST https://neutrino.two-mortons.uk/supervisor/doupdate -H "Content-Type: application/json" -d "{\"password\": \"$(cat ~/neutrino_admin_pass.key)\"}"
     exit 0
 fi
-
 
 echo "'$1' is not a valid subcommand. Use './make help' for a list of subcommands."
