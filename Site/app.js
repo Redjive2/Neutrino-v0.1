@@ -2073,7 +2073,7 @@ async function recoverFromServerLoss() {
 
   document.querySelector('.server-name').textContent = 'No servers';
   document.getElementById('channel-list').innerHTML =
-    '<div style="padding:16px;color:var(--text-muted);font-size:13px">No servers yet. Click + to create one.</div>';
+    '<div style="padding: 16px; color: var(--text-muted); font-size: 13px">No servers yet. Click + to create one.</div>';
   document.getElementById('server-menu-btn').style.display = 'none';
   document.getElementById('delete-server-btn').style.display = 'none';
   document.getElementById('leave-server-btn').style.display = 'none';
@@ -2590,8 +2590,8 @@ async function openExplore() {
   closeReactionPicker();
   if (dmOpen) closeDMs();
   if (dmChatChannel) closeDMChat();
-  clearNavState();
   exploreOpen = true;
+  saveNavState({ view: 'explore' });
 
   document.querySelectorAll('.server-icon[data-server]').forEach(el => el.classList.remove('active'));
   document.getElementById('dm-btn').classList.remove('active');
@@ -2604,7 +2604,7 @@ async function openExplore() {
   const grid = document.getElementById('explore-grid');
 
   if (servers.length === 0) {
-    grid.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:32px">No public servers to explore. Create one with the + button.</div>';
+    grid.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:32px;grid-column:1/-1">No public servers to explore. Create one with the + button.</div>';
     return;
   }
 
@@ -2999,7 +2999,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     errEl.textContent = 'Logging in…';
     const ok = await login(username, password);
 
-    if (ok) { hideLogin(); await initApp(); }
+    if (ok) { hideLogin(); await initApp(); document.querySelector('.app').style.opacity = ''; }
     else { errEl.textContent = 'Invalid username or password.'; }
   }
 
@@ -3431,7 +3431,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (session) {
     await initApp();
+    document.querySelector('.app').style.opacity = '';
   } else {
+    document.querySelector('.app').style.opacity = '';
     showLogin();
   }
 });
@@ -3473,6 +3475,11 @@ async function initApp() {
       ? '<div style="padding:16px;color:var(--text-muted);font-size:13px">Select a server.</div>'
       : '<div style="padding:16px;color:var(--text-muted);font-size:13px">No servers yet. Click + to create one.</div>';
     resetChatArea('Select a server and channel');
+    return;
+  }
+
+  if (nav && nav.view === 'explore') {
+    openExplore();
     return;
   }
 
