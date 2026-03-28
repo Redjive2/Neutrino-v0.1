@@ -461,7 +461,7 @@ function clearNavState() {
   localStorage.removeItem('neutrino-navState');
 }
 
-window.disableNavRestore = function() { localStorage.removeItem('neutrino-navState'); window._skipNavRestore = true; };
+window.disableNavRestore = function() { localStorage.removeItem('neutrino-navState'); localStorage.setItem('neutrino-skipNavRestore', '1'); };
 const drafts = loadDrafts();
 
 function loadDrafts() {
@@ -1685,7 +1685,7 @@ async function switchServer(serverId) {
     el.classList.toggle('active', el.dataset.server === serverId);
   });
 
-  document.getElementById('chat-channel-name').textContent = '—';
+  document.getElementById('chat-channel-name').textContent = '';
   document.getElementById('channel-topic').textContent = '';
   document.getElementById('message-input').placeholder = 'Select a channel first';
   document.getElementById('message-input').disabled = true;
@@ -1735,6 +1735,8 @@ async function switchServer(serverId) {
   document.getElementById('delete-server-btn').style.display = isOwner ? '' : 'none';
   document.getElementById('server-menu-btn').style.display = isOwner ? '' : 'none';
   document.getElementById('leave-server-btn').style.display = isOwner ? 'none' : '';
+  document.getElementById('toggle-members').style.display = '';
+  document.querySelector('.user-controls').style.display = '';
   updateVisibilityBtn();
 
   renderChannelSidebar(serverData);
@@ -2082,7 +2084,7 @@ async function recoverFromServerLoss() {
 // --- Landing pages ---
 
 function resetChatArea(reason) {
-  document.getElementById('chat-channel-name').textContent = '—';
+  document.getElementById('chat-channel-name').textContent = '';
   document.getElementById('channel-topic').textContent = '';
   document.getElementById('message-input').placeholder = reason;
   document.getElementById('message-input').disabled = true;
@@ -2095,7 +2097,7 @@ function resetChatArea(reason) {
       <p>${reason}.</p>
     </div>`;
   document.getElementById('members-sidebar').innerHTML =
-    '<div class="member-category"><span>CHANNEL MEMBERS</span></div>';
+    '<div style="display: none" class="member-category"><span>CHANNEL MEMBERS</span></div>';
 }
 
 function renderServerLanding(serverData) {
@@ -2107,7 +2109,7 @@ function renderServerLanding(serverData) {
     ? `<img src="/media/${enc(thumb)}" alt="${esc(name)}" style="width:64px;height:64px;border-radius:50%;object-fit:cover">`
     : esc(name[0]).toUpperCase();
 
-  document.getElementById('chat-channel-name').textContent = '—';
+  document.getElementById('chat-channel-name').textContent = '';
   document.getElementById('channel-topic').textContent = '';
   document.getElementById('message-input').placeholder = 'Select a channel first';
   document.getElementById('message-input').disabled = true;
@@ -3460,8 +3462,8 @@ async function initApp() {
   renderServerList(servers);
 
   // Restore previous navigation state (call disableNavRestore() in console then reload to go to homepage)
-  const skipRestore = window._skipNavRestore;
-  window._skipNavRestore = false;
+  const skipRestore = localStorage.getItem('neutrino-skipNavRestore') === '1';
+  localStorage.removeItem('neutrino-skipNavRestore');
   const nav = skipRestore ? null : loadNavState();
 
   if (skipRestore) {
