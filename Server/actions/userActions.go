@@ -51,6 +51,10 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	core.Users[username] = &user
 
+	if core.DMServer != nil {
+		core.DMServer.Members = append(core.DMServer.Members, &user)
+	}
+
 	w.WriteHeader(http.StatusCreated)
 	core.Tokenless(w, "(INFO) User '"+username+"' created.", nil, "")
 }

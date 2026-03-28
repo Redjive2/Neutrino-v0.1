@@ -70,7 +70,7 @@ func ValidateUser(user *User, w http.ResponseWriter, token [32]byte) bool {
 		return false
 	}
 
-	if time.Since(user.LastRequest) > 10*time.Minute {
+	if time.Since(user.LastRequest) > 60*time.Minute {
 		w.WriteHeader(http.StatusUnauthorized)
 		Tokenless(w, "(ERROR) Session timed out for user '"+user.Name+"'.", nil, "The session timed out.")
 

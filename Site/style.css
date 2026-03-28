@@ -31,8 +31,8 @@
     --bg-modifier-hover: rgba(255, 255, 255, 0.08);
     --bg-modifier-active: rgba(255, 255, 255, 0.07);
     --bg-modifier-selected: rgba(200, 60, 50, 0.12);
-    --text-normal: #cdcdc5;
-    --text-muted: #5c5c66;
+    --text-normal: #dfdfd7;
+    --text-muted: #787887;
     --text-link: #e8625a;
     --brand-color: #c0392b;
     --brand-hover: #a33025;
@@ -111,7 +111,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     font-family: var(--font-mono);
     color: var(--text-muted);
@@ -135,8 +135,25 @@ body {
 }
 
 .server-icon.home {
+    position: relative;
     background: var(--brand-color);
     color: #fff;
+}
+
+.dm-badge {
+    display: none;
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 12px;
+    height: 12px;
+    background: #ed4245;
+    border-radius: 50%;
+    border: 2px solid var(--bg-primary);
+}
+
+.dm-badge.visible {
+    display: block;
 }
 
 .server-icon.home:hover {
@@ -157,6 +174,24 @@ body {
     border-radius: 16px;
 }
 
+.server-icon.explore {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+
+.server-icon.explore:hover {
+    border-color: var(--brand-color);
+    color: var(--brand-color);
+    background: var(--brand-dim);
+}
+
+.server-icon.explore.active {
+    background: var(--brand-dim);
+    color: var(--brand-color);
+    border: 1px solid var(--brand-color);
+}
+
 .server-icon.add-server {
     background: transparent;
     border: 1px solid var(--border);
@@ -168,6 +203,22 @@ body {
 }
 
 .server-icon.add-server:hover {
+    border-color: var(--brand-color);
+    color: var(--brand-color);
+    background: var(--brand-dim);
+}
+
+.server-list-spacer {
+    flex: 1;
+}
+
+.server-icon.settings {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+
+.server-icon.settings:hover {
     border-color: var(--brand-color);
     color: var(--brand-color);
     background: var(--brand-dim);
@@ -205,7 +256,7 @@ body {
 }
 
 .server-name {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--header-primary);
     letter-spacing: 0.02em;
@@ -268,7 +319,7 @@ body {
     background: none;
     border: none;
     color: var(--text-muted);
-    font-size: 16px;
+    font-size: 17px;
     cursor: pointer;
 }
 
@@ -299,7 +350,7 @@ body {
 .channel-category {
     display: flex;
     align-items: center;
-    padding: 16px 12px 4px 8px;
+    padding: 3px 12px 4px 8px;
     gap: 4px;
     cursor: pointer;
     user-select: none;
@@ -529,7 +580,7 @@ body {
 }
 
 .channel-name {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     flex: 1;
     overflow: hidden;
@@ -612,15 +663,15 @@ body {
 
 .account-menu {
     display: none;
-    position: absolute;
-    bottom: 52px;
-    left: 8px;
-    right: 8px;
+    position: fixed;
+    bottom: 60px;
+    left: 64px;
+    width: 200px;
     background: var(--bg-primary);
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 4px;
-    z-index: 100;
+    z-index: 1000;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
@@ -689,7 +740,7 @@ body {
 }
 
 .chat-channel-name {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--header-primary);
 }
@@ -855,7 +906,7 @@ body {
 }
 
 .message-author {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
 }
@@ -871,7 +922,7 @@ body {
 }
 
 .message-text {
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.45;
     color: var(--text-normal);
     word-wrap: break-word;
@@ -1203,6 +1254,7 @@ body {
     cursor: pointer;
     border-radius: 3px;
     flex-shrink: 0;
+    transform: translateY(-2px);
 }
 
 .invite-user-btn:hover {
@@ -1724,6 +1776,288 @@ body {
 }
 
 /* ===== Explore Panel ===== */
+/* ===== DM Panel ===== */
+.dm-panel {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    background: var(--bg-primary);
+    overflow-y: auto;
+    padding: 48px 40px;
+}
+
+.dm-panel.open {
+    display: flex;
+}
+
+.app.dm-open > .channel-sidebar,
+.app.dm-open > .chat-area,
+.app.dm-open > .members-sidebar {
+    display: none;
+}
+
+.dm-header {
+    text-align: center;
+    margin-bottom: 36px;
+}
+
+.dm-header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--header-primary);
+    margin: 12px 0 6px;
+}
+
+.dm-header p {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.dm-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 860px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.dm-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.dm-card:hover {
+    border-color: var(--brand-color);
+    background: var(--bg-modifier-active);
+}
+
+.dm-card-avatar {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: #fff;
+    overflow: hidden;
+}
+
+.dm-card-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dm-card-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+}
+
+.dm-card-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--header-primary);
+}
+
+.dm-card-preview {
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    transform: translateX(43px) translateY(-7px);
+    max-width: 100%;
+}
+
+.dm-card-time {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    flex-shrink: 0;
+    align-self: flex-end;
+    transform: translateX(17px) translateY(3px);
+}
+
+.dm-delete-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    transform: translateX(10px);
+}
+
+.dm-card:hover .dm-delete-btn {
+    opacity: 1;
+}
+
+.dm-delete-btn:hover {
+    color: var(--brand-color);
+}
+
+.dm-add-btn {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.dm-add-btn:hover {
+    border-color: var(--brand-color);
+    color: var(--brand-color);
+    background: var(--brand-dim);
+}
+
+.dm-empty {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 32px;
+    font-size: 13px;
+}
+
+/* ===== DM Chat Panel (full-page) ===== */
+.dm-chat-panel {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    background: var(--bg-primary);
+    min-width: 0;
+}
+
+.dm-chat-panel.open {
+    display: flex;
+}
+
+.app.dm-chatting > .channel-sidebar,
+.app.dm-chatting > .chat-area,
+.app.dm-chatting > .members-sidebar,
+.app.dm-chatting > .dm-panel {
+    display: none;
+}
+
+.dm-chat-header {
+    height: 48px;
+    min-height: 48px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.dm-chat-back {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s, background 0.15s;
+}
+
+.dm-chat-back:hover {
+    color: var(--header-primary);
+    background: var(--bg-modifier-hover);
+}
+
+.dm-chat-avatar {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: #fff;
+    overflow: hidden;
+}
+
+.dm-chat-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dm-chat-username {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--header-primary);
+}
+
+.dm-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 20px 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.dm-chat-messages .message {
+    padding: 2px 0;
+}
+
+.dm-chat-messages .welcome-message {
+    padding: 20px 0 12px;
+}
+
+.dm-chat-input-area {
+    padding: 12px 20px 20px;
+}
+
+.dm-chat-input-area input {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-normal);
+    font-size: 14px;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.dm-chat-input-area input:focus {
+    border-color: var(--brand-color);
+}
+
+/* ===== Explore Panel ===== */
 .explore-panel {
     display: none;
     flex: 1;
@@ -1813,6 +2147,25 @@ body {
     font-size: 12px;
     font-family: var(--font-mono);
     color: var(--text-muted);
+}
+
+.explore-card.joined {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.explore-card.joined:hover {
+    border-color: var(--border);
+    transform: none;
+}
+
+.explore-card-joined {
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 /* ===== Attachment preview strip ===== */

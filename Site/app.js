@@ -136,7 +136,33 @@ function tokenToHex(token) {
 }
 
 // Toast notifications
-function showToast(message, type = 'error') {
+let pendingToasts = [];
+
+function showToast(message, type = 'error', delay = 0) {
+  if (delay > 0) {
+    const entry = { message, cancelled: false };
+    const timer = setTimeout(() => {
+      pendingToasts = pendingToasts.filter(e => e !== entry);
+      if (!entry.cancelled) _showToast(message, type);
+    }, delay);
+    entry.timer = timer;
+    pendingToasts.push(entry);
+    return;
+  }
+  _showToast(message, type);
+}
+
+function suppressToast(message) {
+  for (const entry of pendingToasts) {
+    if (entry.message === message) {
+      entry.cancelled = true;
+      clearTimeout(entry.timer);
+    }
+  }
+  pendingToasts = pendingToasts.filter(e => !e.cancelled);
+}
+
+function _showToast(message, type = 'error') {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
   toast.className = 'toast' + (type === 'success' ? ' success' : '');
@@ -262,7 +288,7 @@ async function _apiPost(path, body) {
     }
 
     if (!res.ok && data && data.hasUserMessage) {
-      showToast(data.userMessage);
+      showToast(data.userMessage, 'error', 100);
     }
 
     return { ok: res.ok, status: res.status, data };
@@ -293,7 +319,7 @@ async function _apiUpload(file) {
     }
 
     if (!res.ok && data && data.hasUserMessage) {
-      showToast(data.userMessage);
+      showToast(data.userMessage, 'error', 100);
     }
 
     return { ok: res.ok, status: res.status, data };
@@ -398,9 +424,70 @@ function saveLastReadIds() {
   localStorage.setItem('neutrino-lastReadIds', JSON.stringify([...lastReadIds]));
 }
 
+const hiddenDMs = loadHiddenDMs();
+
+function loadHiddenDMs() {
+  try {
+    const raw = localStorage.getItem('neutrino-hiddenDMs');
+    if (raw) return new Map(JSON.parse(raw));
+  } catch {}
+  return new Map();
+}
+
+function saveHiddenDMs() {
+  localStorage.setItem('neutrino-hiddenDMs', JSON.stringify([...hiddenDMs]));
+}
+
+function isDMHidden(dm) {
+  const hiddenAt = hiddenDMs.get(dm.channel);
+  if (hiddenAt == null) return false;
+  // Unhide if there's a newer message from the other user
+  return dm.timestamp == null || dm.timestamp <= hiddenAt;
+}
+
+function saveNavState(state) {
+  localStorage.setItem('neutrino-navState', JSON.stringify(state));
+}
+
+function loadNavState() {
+  try {
+    const raw = localStorage.getItem('neutrino-navState');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
+function clearNavState() {
+  localStorage.removeItem('neutrino-navState');
+}
+
+window.disableNavRestore = function() { localStorage.removeItem('neutrino-navState'); window._skipNavRestore = true; };
+const drafts = loadDrafts();
+
+function loadDrafts() {
+  try {
+    const raw = localStorage.getItem('neutrino-drafts');
+    if (raw) return new Map(JSON.parse(raw));
+  } catch {}
+  return new Map();
+}
+
+function saveDrafts() {
+  if (drafts.size === 0) {
+    localStorage.removeItem('neutrino-drafts');
+  } else {
+    localStorage.setItem('neutrino-drafts', JSON.stringify([...drafts]));
+  }
+}
+
 let pollTimer         = null;
 let sessionCheckTimer = null;
 let exploreOpen       = false;
+let dmOpen            = false;
+let dmListPollTimer   = null;
+let notificationsActive = false;
+let dmNotifTimer      = null;
+let lastDMCheck       = new Map(); // channelName -> { timestamp, preview }
 
 
 // --- Data fetching ---
@@ -451,14 +538,8 @@ async function fetchMyServers(manifestData) {
   const { servers, serverOrder } = manifestData || await fetchManifest();
   userServerOrder = serverOrder;
 
-  const mine = [];
-  for (const s of servers) {
-    const sd = await fetchServerData(s.id);
-    if (sd && sd.members && sd.members.includes(session.username)) {
-      mine.push(s);
-    }
-  }
-
+  const hasMemberField = servers.length > 0 && 'member' in servers[0];
+  const mine = hasMemberField ? servers.filter(s => s.member) : servers;
   return applyServerOrder(mine);
 }
 
@@ -507,8 +588,10 @@ async function register(username, password) {
 async function logout() {
   stopPolling();
   stopSessionCheck();
+  stopDMNotifPoll();
   if (session) await apiPost('/close/session', authBody());
   clearSession();
+  clearNavState();
   location.reload();
 }
 
@@ -638,6 +721,16 @@ function rebuildDOM() {
   const container = document.getElementById('messages-container');
   const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
 
+  // Preserve any in-progress edit so polling doesn't destroy it
+  let activeEdit = null;
+  const editInput = container.querySelector('.edit-input');
+  if (editInput) {
+    const msgEl = editInput.closest('.message');
+    if (msgEl) {
+      activeEdit = { id: Number(msgEl.dataset.msgId), value: editInput.value };
+    }
+  }
+
   let top = '';
 
   if (hasMoreMessages) {
@@ -658,6 +751,16 @@ function rebuildDOM() {
   }
 
   if (atBottom) container.scrollTop = container.scrollHeight;
+
+  // Restore edit if the message still exists
+  if (activeEdit) {
+    const msg = renderedMessages.find(m => m.id === activeEdit.id);
+    if (msg) {
+      startEditMessage(activeEdit.id);
+      const restored = container.querySelector(`.message[data-msg-id="${activeEdit.id}"] .edit-input`);
+      if (restored) restored.value = activeEdit.value;
+    }
+  }
 }
 
 
@@ -830,7 +933,7 @@ function renderChannelSidebar(serverData) {
       if (e.target.closest('.add-channel-btn') || e.target.closest('.rename-cat-btn') || e.target.closest('.remove-cat-btn')) return;
 
       const catName = catEl.dataset.category;
-      const channelsDiv = list.querySelector(`.category-channels[data-category="${catName}"]`);
+      const channelsDiv = list.querySelector(`.category-channels[data-category="${CSS.escape(catName)}"]`);
 
       if (collapsedCategories.has(catName)) {
         collapsedCategories.delete(catName);
@@ -1021,7 +1124,7 @@ async function renameServer() {
   currentServerName = name.trim();
   document.querySelector('.server-name').textContent = currentServerName;
 
-  const icon = document.querySelector(`.server-icon[data-server="${currentServer}"]`);
+  const icon = document.querySelector(`.server-icon[data-server="${CSS.escape(currentServer)}"]`);
   if (icon) {
     icon.title = currentServerName;
     if (!serverThumbnailCache.get(currentServer)) {
@@ -1096,6 +1199,10 @@ async function deleteMessage(msgId) {
   if (!ok) return;
 
   renderedMessages = renderedMessages.filter(m => m.id !== msgId);
+  if (lastSeenId === msgId) {
+    const newest = renderedMessages.length > 0 ? renderedMessages[renderedMessages.length - 1] : null;
+    lastSeenId = newest ? newest.id : -1;
+  }
   rebuildDOM();
 }
 
@@ -1462,7 +1569,7 @@ async function changeServerThumbnail() {
 
     serverThumbnailCache.set(currentServer, id);
 
-    const icon = document.querySelector(`.server-icon[data-server="${currentServer}"]`);
+    const icon = document.querySelector(`.server-icon[data-server="${CSS.escape(currentServer)}"]`);
     if (icon) {
       icon.innerHTML = `<img src="/media/${enc(id)}" alt="${esc(currentServerName || '')}">`;
     }
@@ -1540,8 +1647,22 @@ async function deleteAccount() {
 
 async function switchServer(serverId) {
   if (exploreOpen) closeExplore();
+  if (dmOpen) closeDMs();
+  if (dmChatChannel) closeDMChat();
   closeEmojiPicker();
   stopPolling();
+
+  // Save draft from current channel before switching
+  if (currentServer && currentChannel) {
+    const prevKey = `${currentServer}/${currentCategory}/${currentChannel}`;
+    const prevInput = document.getElementById('message-input');
+    if (prevInput.value.trim()) {
+      drafts.set(prevKey, prevInput.value);
+    } else {
+      drafts.delete(prevKey);
+    }
+    saveDrafts();
+  }
 
   const gen = ++navGeneration;
 
@@ -1568,6 +1689,8 @@ async function switchServer(serverId) {
   document.getElementById('channel-topic').textContent = '';
   document.getElementById('message-input').placeholder = 'Select a channel first';
   document.getElementById('message-input').disabled = true;
+  document.getElementById('attach-btn').disabled = true;
+  document.getElementById('emoji-btn').disabled = true;
   document.getElementById('messages-container').innerHTML = `
     <div class="welcome-message">
       <div class="welcome-icon">…</div>
@@ -1620,6 +1743,7 @@ async function switchServer(serverId) {
   if (first) {
     first.click();
   } else {
+    saveNavState({ view: 'server', server: serverId });
     renderServerLanding(serverData);
   }
 }
@@ -1634,6 +1758,18 @@ async function switchChannel(categoryName, channelName) {
   renderAttachmentPreviews();
 
   const gen = ++navGeneration;
+
+  // Save draft from previous channel
+  if (currentServer && currentChannel) {
+    const prevKey = `${currentServer}/${currentCategory}/${currentChannel}`;
+    const prevInput = document.getElementById('message-input');
+    if (prevInput.value.trim()) {
+      drafts.set(prevKey, prevInput.value);
+    } else {
+      drafts.delete(prevKey);
+    }
+    saveDrafts();
+  }
 
   currentCategory  = categoryName;
   currentChannel   = channelName;
@@ -1651,8 +1787,12 @@ async function switchChannel(categoryName, channelName) {
 
   document.getElementById('chat-channel-name').textContent = categoryName;
   document.getElementById('channel-topic').textContent = `# ${channelName}`;
+  const newKey = `${currentServer}/${categoryName}/${channelName}`;
+  document.getElementById('message-input').value = drafts.get(newKey) || '';
   document.getElementById('message-input').placeholder = `Message #${channelName}`;
   document.getElementById('message-input').disabled = false;
+  document.getElementById('attach-btn').disabled = false;
+  document.getElementById('emoji-btn').disabled = false;
 
   const data = await fetchChannelData(currentServer, categoryName, channelName);
   if (gen !== navGeneration) return;
@@ -1682,6 +1822,7 @@ async function switchChannel(categoryName, channelName) {
   lastReadIds.set(readKey, lastSeenId);
   saveLastReadIds();
 
+  saveNavState({ view: 'channel', server: currentServer, category: categoryName, channel: channelName });
   startPolling();
 }
 
@@ -1752,7 +1893,7 @@ async function poll() {
 
   if (newThumb !== oldThumb) {
     serverThumbnailCache.set(currentServer, newThumb);
-    const icon = document.querySelector(`.server-icon[data-server="${currentServer}"]`);
+    const icon = document.querySelector(`.server-icon[data-server="${CSS.escape(currentServer)}"]`);
 
     if (icon) {
       if (newThumb) {
@@ -1839,6 +1980,7 @@ async function poll() {
   if (!session || gen !== navGeneration) return;
 
   if (result === null) {
+    suppressToast("That message doesn't exist.");
     await recoverFromChannelLoss();
     return;
   }
@@ -1930,6 +2072,9 @@ async function recoverFromServerLoss() {
   document.querySelector('.server-name').textContent = 'No servers';
   document.getElementById('channel-list').innerHTML =
     '<div style="padding:16px;color:var(--text-muted);font-size:13px">No servers yet. Click + to create one.</div>';
+  document.getElementById('server-menu-btn').style.display = 'none';
+  document.getElementById('delete-server-btn').style.display = 'none';
+  document.getElementById('leave-server-btn').style.display = 'none';
   resetChatArea('No server selected');
 }
 
@@ -1941,6 +2086,8 @@ function resetChatArea(reason) {
   document.getElementById('channel-topic').textContent = '';
   document.getElementById('message-input').placeholder = reason;
   document.getElementById('message-input').disabled = true;
+  document.getElementById('attach-btn').disabled = true;
+  document.getElementById('emoji-btn').disabled = true;
   document.getElementById('messages-container').innerHTML = `
     <div class="welcome-message">
       <div class="welcome-icon">N</div>
@@ -1964,6 +2111,8 @@ function renderServerLanding(serverData) {
   document.getElementById('channel-topic').textContent = '';
   document.getElementById('message-input').placeholder = 'Select a channel first';
   document.getElementById('message-input').disabled = true;
+  document.getElementById('attach-btn').disabled = true;
+  document.getElementById('emoji-btn').disabled = true;
 
   document.getElementById('messages-container').innerHTML = `
     <div class="welcome-message">
@@ -1978,13 +2127,472 @@ function renderServerLanding(serverData) {
 }
 
 
+// --- DMs ---
+
+function formatDMTime(ts) {
+  const d = new Date(ts);
+  const mon = d.toLocaleDateString('en-US', { month: 'short' });
+  const day = d.getDate();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${mon} ${day} <span style="opacity:0.7">@</span> ${hh}<span style="opacity:0.7">:</span>${mm}`;
+}
+
+function openDMs() {
+  stopPolling();
+  closeEmojiPicker();
+  closeReactionPicker();
+  if (exploreOpen) closeExplore();
+  if (dmChatChannel) closeDMChat();
+  dmOpen = true;
+
+  document.querySelectorAll('.server-icon[data-server]').forEach(el => el.classList.remove('active'));
+  document.getElementById('explore-btn').classList.remove('active');
+  document.getElementById('dm-btn').classList.add('active');
+  document.getElementById('dm-badge').classList.remove('visible');
+  document.querySelector('.app').classList.add('dm-open');
+  document.getElementById('dm-panel').classList.add('open');
+
+  saveNavState({ view: 'dms' });
+  renderDMList();
+  startDMListPoll();
+}
+
+function closeDMs() {
+  stopDMListPoll();
+  dmOpen = false;
+  document.getElementById('dm-btn').classList.remove('active');
+  document.querySelector('.app').classList.remove('dm-open');
+  document.getElementById('dm-panel').classList.remove('open');
+
+  if (currentServer) {
+    document.querySelectorAll('.server-icon[data-server]').forEach(el => {
+      el.classList.toggle('active', el.dataset.server === currentServer);
+    });
+  }
+}
+
+async function renderDMList() {
+  const list = document.getElementById('dm-list');
+
+  const { ok, data } = await apiPost('/get/dms', authBody());
+  const dms = (ok ? (data.data || []) : []).filter(dm => !isDMHidden(dm));
+
+  const addBtn = `<button class="dm-add-btn" id="dm-add-btn">+ New Direct Channel</button>`;
+
+  if (dms.length === 0) {
+    list.innerHTML = addBtn + '<div class="dm-empty">No conversations yet.</div>';
+    document.getElementById('dm-add-btn').addEventListener('click', startNewDM);
+    return;
+  }
+
+  await ensureProfilePics(dms.map(dm => dm.otherUser));
+
+  list.innerHTML = addBtn + dms.map(dm => {
+    const pic = profilePicCache.get(dm.otherUser);
+    const avatarInner = pic
+      ? `<img src="/media/${enc(pic)}" alt="${esc(dm.otherUser)}">`
+      : esc(dm.otherUser[0]).toUpperCase();
+    const avatarStyle = pic ? '' : ' style="background:var(--brand-color)"';
+    return `
+      <div class="dm-card" data-dm-channel="${esc(dm.channel)}" data-dm-user="${esc(dm.otherUser)}">
+        <div class="dm-card-avatar"${avatarStyle}>${avatarInner}</div>
+        <div class="dm-card-body">
+          <span class="dm-card-name">${esc(dm.otherUser)}</span>
+          <span class="dm-card-preview">${dm.preview ? esc(dm.preview) : ''}</span>
+        </div>
+        <span class="dm-card-time">${dm.timestamp ? formatDMTime(dm.timestamp) : ''}</span>
+        <button class="dm-delete-btn" title="Delete conversation">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+          </svg>
+        </button>
+      </div>`;
+  }).join('');
+
+  document.getElementById('dm-add-btn').addEventListener('click', startNewDM);
+
+  // Click card to open the DM conversation
+  list.querySelectorAll('.dm-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.dm-delete-btn')) return;
+      const channel = card.dataset.dmChannel;
+      openDMConversation(channel);
+    });
+  });
+
+  list.querySelectorAll('.dm-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const card = btn.closest('.dm-card');
+      const dmUser = card.dataset.dmUser;
+      const channel = card.dataset.dmChannel;
+      if (!await showConfirm(`Hide conversation with ${dmUser}?`)) return;
+      hiddenDMs.set(channel, Date.now());
+      saveHiddenDMs();
+      showToast('Conversation hidden.', 'success');
+      renderDMList();
+    });
+  });
+}
+
+function startDMListPoll() {
+  stopDMListPoll();
+  dmListPollTimer = setInterval(dmListPoll, 5000);
+}
+
+function stopDMListPoll() {
+  if (dmListPollTimer) { clearInterval(dmListPollTimer); dmListPollTimer = null; }
+}
+
+async function dmListPoll() {
+  if (!session || !dmOpen || dmChatChannel) return;
+  await renderDMList();
+}
+
+// --- DM Chat ---
+
+let dmChatChannel   = null;
+let dmChatUser      = null;
+let dmChatLastSeen  = -1;
+let dmChatMessages  = [];
+let dmChatPollTimer = null;
+
+async function openDMConversation(channelName, otherUser) {
+  stopDMListPoll();
+
+  // Save draft from previous DM conversation
+  if (dmChatChannel) {
+    const prevInput = document.getElementById('dm-chat-input');
+    if (prevInput.value.trim()) {
+      drafts.set(`dm:${dmChatChannel}`, prevInput.value);
+    } else {
+      drafts.delete(`dm:${dmChatChannel}`);
+    }
+    saveDrafts();
+  }
+
+  const gen = ++navGeneration;
+
+  // If otherUser not provided, try to extract from DM card data
+  if (!otherUser) {
+    const card = document.querySelector(`.dm-card[data-dm-channel="${CSS.escape(channelName)}"]`);
+    otherUser = card ? card.dataset.dmUser : '?';
+  }
+
+  dmChatChannel  = channelName;
+  dmChatUser     = otherUser;
+  dmChatLastSeen = -1;
+  dmChatMessages = [];
+
+  await ensureProfilePics([otherUser]);
+  if (gen !== navGeneration) return;
+
+  const pic = profilePicCache.get(otherUser);
+
+  const avatarEl = document.getElementById('dm-chat-avatar');
+  if (pic) {
+    avatarEl.innerHTML = `<img src="/media/${enc(pic)}" alt="${esc(otherUser)}">`;
+    avatarEl.style.background = 'transparent';
+  } else {
+    avatarEl.textContent = (otherUser || '?')[0].toUpperCase();
+    avatarEl.style.background = 'var(--brand-color)';
+  }
+
+  document.getElementById('dm-chat-username').textContent = otherUser;
+  document.getElementById('dm-chat-input').value = drafts.get(`dm:${channelName}`) || '';
+  document.getElementById('dm-chat-input').placeholder = `Message ${otherUser}`;
+  document.getElementById('dm-chat-overlay').classList.add('open');
+  document.querySelector('.app').classList.add('dm-chatting');
+
+  // Load messages
+  const data = await fetchChannelData('dm-system', '[SYSTEM] DM Category', channelName);
+  if (gen !== navGeneration) return;
+
+  if (!data) {
+    closeDMChat();
+    return;
+  }
+
+  const history = data.history || [];
+  const allUsers = [...(data.members || []), ...history.map(m => m.from)];
+  await ensureProfilePics(allUsers);
+  if (gen !== navGeneration) return;
+
+  dmChatMessages = [...history].reverse().map(toDisplayMessage);
+  if (history.length > 0) dmChatLastSeen = history[0].id;
+
+  renderDMChatMessages();
+  startDMChatPoll();
+
+  saveNavState({ view: 'dm-chat', channel: channelName, otherUser });
+  document.getElementById('dm-chat-input').focus();
+}
+
+function renderDMChatMessages() {
+  const container = document.getElementById('dm-chat-messages');
+  const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+
+  const welcome = `
+    <div class="welcome-message">
+      <div class="welcome-icon" style="font-size:24px">
+        ${profilePicCache.get(dmChatUser)
+          ? `<img src="/media/${enc(profilePicCache.get(dmChatUser))}" style="width:48px;height:48px;border-radius:8px;object-fit:cover">`
+          : esc(dmChatUser[0]).toUpperCase()}
+      </div>
+      <h1>${esc(dmChatUser)}</h1>
+      <p>This is the beginning of your conversation.</p>
+    </div>`;
+
+  container.innerHTML = welcome + buildDMMessageHTML(dmChatMessages);
+
+  if (atBottom) container.scrollTop = container.scrollHeight;
+}
+
+function buildDMMessageHTML(msgs) {
+  return msgs.map((msg, i) => {
+    const prev = i > 0 ? msgs[i - 1] : null;
+    const isGroupStart = !prev || prev.from !== msg.from;
+    const { inner, bg } = avatarHTML(msg.from, profilePicCache.get(msg.from));
+    const canDelete = session && msg.from === session.username;
+
+    return `
+      <div class="message ${isGroupStart ? 'message-group-start' : ''}" data-msg-id="${msg.id}">
+        <div class="message-avatar ${isGroupStart ? '' : 'hidden'}" style="background:${bg}">
+          ${inner}
+        </div>
+        <div class="message-content">
+          ${isGroupStart ? `
+            <div class="message-header">
+              <span class="message-author">${esc(msg.from)}</span>
+              <span class="message-timestamp">${msg.time}</span>
+            </div>` : ''}
+          <div class="message-text">${formatText(msg.content)}</div>
+          ${buildAttachmentsHTML(msg.attachments)}
+        </div>
+        ${canDelete ? `<div class="message-actions">
+          <button class="msg-action-btn msg-delete-btn" data-msg-id="${msg.id}" title="Delete message">${DELETE_ICON}</button>
+        </div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function closeDMChat() {
+  stopDMChatPoll();
+
+  // Save draft before closing
+  if (dmChatChannel) {
+    const input = document.getElementById('dm-chat-input');
+    if (input.value.trim()) {
+      drafts.set(`dm:${dmChatChannel}`, input.value);
+    } else {
+      drafts.delete(`dm:${dmChatChannel}`);
+    }
+    saveDrafts();
+  }
+
+  dmChatChannel = null;
+  dmChatUser    = null;
+  dmChatLastSeen = -1;
+  dmChatMessages = [];
+  document.getElementById('dm-chat-overlay').classList.remove('open');
+  document.querySelector('.app').classList.remove('dm-chatting');
+
+  if (dmOpen) {
+    await renderDMList();
+    startDMListPoll();
+  }
+}
+
+function startDMChatPoll() {
+  stopDMChatPoll();
+  dmChatPollTimer = setInterval(dmChatPoll, 5000);
+}
+
+function stopDMChatPoll() {
+  if (dmChatPollTimer) { clearInterval(dmChatPollTimer); dmChatPollTimer = null; }
+}
+
+async function dmChatPoll() {
+  if (!dmChatChannel || dmChatLastSeen < 0) return;
+
+  const result = await fetchNewMessages('dm-system', '[SYSTEM] DM Category', dmChatChannel, dmChatLastSeen);
+  if (!result) {
+    suppressToast("That message doesn't exist.");
+    // The reference message was likely deleted — reload full history
+    const data = await fetchChannelData('dm-system', '[SYSTEM] DM Category', dmChatChannel);
+    if (data) {
+      const history = data.history || [];
+      const allUsers = history.map(m => m.from);
+      await ensureProfilePics(allUsers);
+      dmChatMessages = [...history].reverse().map(toDisplayMessage);
+      dmChatLastSeen = history.length > 0 ? history[0].id : -1;
+      renderDMChatMessages();
+    }
+    return;
+  }
+
+  let changed = false;
+
+  // Detect deleted messages: reactionUpdates contains all surviving messages
+  // from dmChatLastSeen onward. Any local message whose ID should be in that
+  // range but isn't has been deleted.
+  if (result.reactionUpdates) {
+    const survivingIds = new Set(result.reactionUpdates.map(r => r.id));
+    const before = dmChatMessages.length;
+    dmChatMessages = dmChatMessages.filter(m => survivingIds.has(m.id));
+    if (dmChatMessages.length !== before) changed = true;
+  }
+
+  // Add new messages
+  if (result.messages && result.messages.length > 0) {
+    const allUsers = result.messages.map(m => m.from);
+    await ensureProfilePics(allUsers);
+
+    dmChatLastSeen = result.messages[0].id;
+
+    const newMsgs = [...result.messages].reverse().map(toDisplayMessage);
+    dmChatMessages = [...dmChatMessages, ...newMsgs];
+    changed = true;
+  }
+
+  // Update dmChatLastSeen if the previous latest was deleted
+  if (dmChatMessages.length > 0) {
+    dmChatLastSeen = dmChatMessages[dmChatMessages.length - 1].id;
+  } else {
+    dmChatLastSeen = -1;
+  }
+
+  if (changed) renderDMChatMessages();
+}
+
+async function sendDMMessage(text) {
+  if (!text.trim() || !dmChatChannel) return;
+
+  if (text.trim().length > 2048) {
+    showToast('Message cannot exceed 2048 characters.');
+    return;
+  }
+
+  const { ok } = await apiPost(
+    `/new/message/${enc('dm-system')}/${enc('[SYSTEM] DM Category')}/${enc(dmChatChannel)}`,
+    authBody({ content: text.trim(), attachments: [] })
+  );
+
+  if (!ok) {
+    document.getElementById('dm-chat-input').value = text;
+    return;
+  }
+
+  if (dmChatChannel) {
+    drafts.delete(`dm:${dmChatChannel}`);
+    saveDrafts();
+  }
+
+  // Poll immediately to show the new message
+  if (dmChatLastSeen < 0) {
+    const data = await fetchChannelData('dm-system', '[SYSTEM] DM Category', dmChatChannel);
+    if (data) {
+      const history = data.history || [];
+      const allUsers = history.map(m => m.from);
+      await ensureProfilePics(allUsers);
+      dmChatMessages = [...history].reverse().map(toDisplayMessage);
+      if (history.length > 0) dmChatLastSeen = history[0].id;
+      renderDMChatMessages();
+    }
+  } else {
+    await dmChatPoll();
+  }
+}
+
+async function startNewDM() {
+  const username = await showPrompt('Username to message:');
+  if (!username || !username.trim()) return;
+
+  const { ok, data } = await apiPost(`/new/dm/${enc(username.trim())}`, authBody());
+  if (!ok) return;
+
+  const channel = data.data && data.data.channel;
+  if (channel) {
+    openDMConversation(channel, username.trim());
+  }
+}
+
+
+// --- DM Notifications ---
+
+function startDMNotifPoll() {
+  stopDMNotifPoll();
+  dmNotifTimer = setInterval(checkDMNotifications, 10000);
+}
+
+function stopDMNotifPoll() {
+  if (dmNotifTimer) { clearInterval(dmNotifTimer); dmNotifTimer = null; }
+}
+
+async function checkDMNotifications() {
+  if (!session) return;
+
+  const { ok, data } = await apiPost('/get/dms', authBody());
+  if (!ok) return;
+
+  const dms = data.data || [];
+  let hasUnread = false;
+
+  for (const dm of dms) {
+    if (!dm.timestamp || !dm.preview) continue;
+
+    const prev = lastDMCheck.get(dm.channel);
+    const isNew = !prev || dm.timestamp > prev.timestamp;
+
+    if (isNew) {
+      lastDMCheck.set(dm.channel, { timestamp: dm.timestamp, preview: dm.preview });
+
+      // Skip if we sent the message, or we're viewing this DM right now
+      if (dm.previewFrom === session.username) continue;
+      if (dmChatChannel === dm.channel) continue;
+
+      hasUnread = true;
+
+      if (notificationsActive) {
+        new Notification(dm.otherUser, {
+          body: dm.preview,
+          tag: `dm-${dm.channel}-${dm.timestamp}`,
+        });
+      }
+    }
+  }
+
+  if (hasUnread && (!dmOpen || dmChatChannel)) {
+    document.getElementById('dm-badge').classList.add('visible');
+  }
+}
+
+async function seedDMNotifState() {
+  if (!session) return;
+  const { ok, data } = await apiPost('/get/dms', authBody());
+  if (!ok) return;
+  for (const dm of (data.data || [])) {
+    if (dm.timestamp) {
+      lastDMCheck.set(dm.channel, { timestamp: dm.timestamp, preview: dm.preview });
+    }
+  }
+}
+
+
 // --- Explore ---
 
 async function openExplore() {
   stopPolling();
+  closeEmojiPicker();
+  closeReactionPicker();
+  if (dmOpen) closeDMs();
+  if (dmChatChannel) closeDMChat();
+  clearNavState();
   exploreOpen = true;
 
   document.querySelectorAll('.server-icon[data-server]').forEach(el => el.classList.remove('active'));
+  document.getElementById('dm-btn').classList.remove('active');
   document.getElementById('explore-btn').classList.add('active');
   document.querySelector('.app').classList.add('exploring');
   document.getElementById('explore-panel').classList.add('open');
@@ -2003,16 +2611,18 @@ async function openExplore() {
     const iconInner = thumb
       ? `<img src="/media/${enc(thumb)}" alt="${esc(s.name)}">`
       : esc(s.name[0]).toUpperCase();
+    const joined = s.member;
 
     return `
-      <div class="explore-card" data-server="${s.id}">
+      <div class="explore-card${joined ? ' joined' : ''}" data-server="${s.id}">
         <div class="explore-card-icon">${iconInner}</div>
         <span class="explore-card-name">${esc(s.name)}</span>
         <span class="explore-card-owner">Owner: ${esc(s.owner)}</span>
+        ${joined ? '<span class="explore-card-joined">Joined</span>' : ''}
       </div>`;
   }).join('');
 
-  grid.querySelectorAll('.explore-card').forEach(card => {
+  grid.querySelectorAll('.explore-card:not(.joined)').forEach(card => {
     card.addEventListener('click', async () => {
       const serverId = card.dataset.server;
       await apiPost(`/join/server/${enc(serverId)}`, authBody());
@@ -2080,7 +2690,11 @@ async function sendMessage(text) {
     return;
   }
 
-  // Revoke object URLs only after confirmed success
+  // Clear draft and revoke object URLs only after confirmed success
+  if (currentServer && currentChannel) {
+    drafts.delete(`${currentServer}/${currentCategory}/${currentChannel}`);
+    saveDrafts();
+  }
   savedAttachments.forEach(a => URL.revokeObjectURL(a.objectURL));
 
   if (lastSeenId < 0) {
@@ -2115,13 +2729,16 @@ async function loadMoreMessages() {
 
   const older = [...(data.history || [])].reverse().map(toDisplayMessage);
 
-  const container = document.getElementById('messages-container');
-  const prevHeight = container.scrollHeight;
+  // Remember the first previously-visible message to anchor scroll position
+  const anchorId = renderedMessages.length > 0 ? renderedMessages[0].id : null;
 
   renderedMessages = [...older, ...renderedMessages];
   rebuildDOM();
 
-  container.scrollTop += container.scrollHeight - prevHeight;
+  if (anchorId != null) {
+    const anchorEl = document.querySelector(`.message[data-msg-id="${anchorId}"]`);
+    if (anchorEl) anchorEl.scrollIntoView({ block: 'start' });
+  }
 }
 
 
@@ -2344,6 +2961,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.preventDefault();
       e.target.click();
     }
+    if (e.key === 'Escape' && dmChatChannel) {
+      closeDMChat();
+      openDMs();
+    }
   });
 
   // Login/register tabs
@@ -2549,6 +3170,55 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (inviteBtn) toggleAddMemberDropdown();
   });
 
+  // DMs
+
+  document.getElementById('dm-btn').addEventListener('click', () => {
+    if (dmOpen) {
+      closeDMs();
+      if (currentServer) switchServer(currentServer);
+    } else {
+      openDMs();
+    }
+  });
+
+  // DM chat panel
+
+  document.getElementById('dm-chat-back').addEventListener('click', () => {
+    closeDMChat();
+    openDMs();
+  });
+
+  document.getElementById('dm-chat-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const input = e.target;
+      const text = input.value;
+      input.value = '';
+      sendDMMessage(text);
+    }
+  });
+
+  document.getElementById('dm-chat-messages').addEventListener('click', async (e) => {
+    const deleteBtn = e.target.closest('.msg-delete-btn');
+    if (deleteBtn && dmChatChannel) {
+      const msgId = deleteBtn.dataset.msgId;
+      const { ok } = await apiPost(
+        `/remove/message/${enc('dm-system')}/${enc('[SYSTEM] DM Category')}/${enc(dmChatChannel)}/${msgId}`,
+        authBody()
+      );
+      if (ok) {
+        const numId = Number(msgId);
+        dmChatMessages = dmChatMessages.filter(m => m.id !== numId);
+        if (dmChatLastSeen === numId) {
+          // Find the new most recent message (last in display order = newest)
+          const newest = dmChatMessages.length > 0 ? dmChatMessages[dmChatMessages.length - 1] : null;
+          dmChatLastSeen = newest ? newest.id : -1;
+        }
+        renderDMChatMessages();
+      }
+    }
+  });
+
   // Explore
 
   document.getElementById('explore-btn').addEventListener('click', () => {
@@ -2593,8 +3263,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     accountMenu.classList.toggle('open');
   });
 
+  document.getElementById('server-bar-settings-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    accountMenu.classList.toggle('open');
+  });
+
   document.addEventListener('click', e => {
-    if (!e.target.closest('#account-menu') && !e.target.closest('#account-menu-btn')) {
+    if (!e.target.closest('#account-menu') && !e.target.closest('#account-menu-btn') && !e.target.closest('#server-bar-settings-btn')) {
       accountMenu.classList.remove('open');
     }
   });
@@ -2614,6 +3289,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     changePassword();
   });
 
+  document.getElementById('toggle-notifications-btn').addEventListener('click', () => {
+    if (!notificationsActive) {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          notificationsActive = true;
+          showToast('Notifications enabled.', 'success');
+        } else {
+          showToast('Notification permission denied.');
+        }
+      });
+    } else {
+      notificationsActive = false;
+      showToast('Notifications disabled.', 'success');
+    }
+  });
+  
   document.getElementById('logout-btn').addEventListener('click', async () => {
     accountMenu.classList.remove('open');
     if (await showConfirm('Log out of Neutrino?')) logout();
@@ -2653,7 +3344,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     serverThumbnailCache.set(currentServer, null);
 
-    const icon = document.querySelector(`.server-icon[data-server="${currentServer}"]`);
+    const icon = document.querySelector(`.server-icon[data-server="${CSS.escape(currentServer)}"]`);
     if (icon) {
       icon.innerHTML = '';
       icon.textContent = (currentServerName || '?')[0].toUpperCase();
@@ -2712,6 +3403,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // Save drafts on page unload so in-progress input isn't lost
+  window.addEventListener('beforeunload', () => {
+    if (currentServer && currentChannel) {
+      const val = document.getElementById('message-input').value;
+      if (val.trim()) {
+        drafts.set(`${currentServer}/${currentCategory}/${currentChannel}`, val);
+      } else {
+        drafts.delete(`${currentServer}/${currentCategory}/${currentChannel}`);
+      }
+      saveDrafts();
+    }
+    if (dmChatChannel) {
+      const val = document.getElementById('dm-chat-input').value;
+      if (val.trim()) {
+        drafts.set(`dm:${dmChatChannel}`, val);
+      } else {
+        drafts.delete(`dm:${dmChatChannel}`);
+      }
+      saveDrafts();
+    }
+  });
+
   // Boot
 
   if (session) {
@@ -2733,14 +3446,76 @@ async function initApp() {
   profilePicCache.set(session.username, session.profilePic || null);
   startSessionCheck();
 
+  // Seed DM state so we don't fire notifications for old messages,
+  // then start the DM poll (always runs for unread badge; browser
+  // notifications only fire when notificationsActive is true).
+  await seedDMNotifState();
+  if (Notification.permission === 'granted') {
+    notificationsActive = true;
+  }
+  startDMNotifPoll();
+
   const d = check.data.data || {};
   const servers = await fetchMyServers({ servers: d.servers || [], serverOrder: d.serverOrder || [] });
   renderServerList(servers);
 
+  // Restore previous navigation state (call disableNavRestore() in console then reload to go to homepage)
+  const skipRestore = window._skipNavRestore;
+  window._skipNavRestore = false;
+  const nav = skipRestore ? null : loadNavState();
+
+  if (skipRestore) {
+    // disableNavRestore() was called — go straight to the homepage
+    document.querySelector('.server-name').textContent = 'Neutrino';
+    document.getElementById('channel-list').innerHTML = servers.length > 0
+      ? '<div style="padding:16px;color:var(--text-muted);font-size:13px">Select a server.</div>'
+      : '<div style="padding:16px;color:var(--text-muted);font-size:13px">No servers yet. Click + to create one.</div>';
+    resetChatArea('Select a server and channel');
+    return;
+  }
+
+  if (nav && nav.view === 'dms') {
+    openDMs();
+    return;
+  }
+
+  if (nav && nav.view === 'dm-chat' && nav.channel) {
+    openDMs();
+    await openDMConversation(nav.channel, nav.otherUser);
+    // If the channel failed to load, openDMConversation calls closeDMChat
+    // and we'll be back on the DM list — that's fine.
+    return;
+  }
+
+  if (nav && nav.view === 'channel' && nav.server && nav.category && nav.channel) {
+    const valid = servers.some(s => s.id === nav.server);
+    if (valid) {
+      await switchServer(nav.server);
+      // switchServer auto-clicks first channel; override to the saved one
+      if (currentServer === nav.server) {
+        await switchChannel(nav.category, nav.channel);
+      }
+      return;
+    }
+  }
+
+  if (nav && nav.view === 'server' && nav.server) {
+    const valid = servers.some(s => s.id === nav.server);
+    if (valid) {
+      await switchServer(nav.server);
+      return;
+    }
+  }
+
+  // Fall back to the first server instead of showing the homepage
+  if (servers.length > 0) {
+    await switchServer(servers[0].id);
+    return;
+  }
+
   document.querySelector('.server-name').textContent = 'Neutrino';
-  document.getElementById('channel-list').innerHTML = servers.length > 0
-    ? '<div style="padding:16px;color:var(--text-muted);font-size:13px">Select a server.</div>'
-    : '<div style="padding:16px;color:var(--text-muted);font-size:13px">No servers yet. Click + to create one.</div>';
+  document.getElementById('channel-list').innerHTML =
+    '<div style="padding:16px;color:var(--text-muted);font-size:13px">No servers yet. Click + to create one.</div>';
 
   resetChatArea('Select a server and channel');
 }

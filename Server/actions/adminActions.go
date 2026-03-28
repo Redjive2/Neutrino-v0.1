@@ -28,6 +28,12 @@ func AddUserToServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if server.Id == core.DMServerID {
+		w.WriteHeader(http.StatusForbidden)
+		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' attempted to invite to the DM server.", nil, "You cannot invite users to the DM server.")
+		return
+	}
+
 	if user != server.Owner {
 		w.WriteHeader(http.StatusForbidden)
 		core.WithToken(w, user, "(ERROR) User '"+user.Name+"' is not authorized to add target user '"+targetUsername+"' to server '"+serverId+"'.", nil, "You must be the server owner to add members.")

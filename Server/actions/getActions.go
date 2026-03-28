@@ -14,6 +14,7 @@ type ServerListEntry struct {
 	Owner     string `json:"owner"`
 	Thumbnail string `json:"thumbnail"`
 	Public    bool   `json:"public"`
+	Member    bool   `json:"member"`
 }
 
 func GetManifest(w http.ResponseWriter, r *http.Request) {
@@ -30,15 +31,20 @@ func GetManifest(w http.ResponseWriter, r *http.Request) {
 	serverList := make([]ServerListEntry, 0, len(core.Servers))
 
 	for _, server := range core.Servers {
+		if server.Id == core.DMServerID {
+			continue
+		}
 		if !server.Public && !slices.Contains(server.Members, user) {
 			continue
 		}
+
 		serverList = append(serverList, ServerListEntry{
 			Id:        server.Id,
 			Name:      server.Name,
 			Owner:     server.Owner.Name,
 			Thumbnail: server.Thumbnail,
 			Public:    server.Public,
+			Member:    slices.Contains(server.Members, user),
 		})
 	}
 
@@ -47,13 +53,15 @@ func GetManifest(w http.ResponseWriter, r *http.Request) {
 	})
 
 	type ManifestData struct {
-		Servers     []ServerListEntry `json:"servers"`
-		ServerOrder []string          `json:"serverOrder"`
+		Servers    []ServerListEntry `json:"servers"`
+		ServerOrder []string         `json:"serverOrder"`
+		DMServerID string            `json:"dmServerId"`
 	}
 
 	core.WithToken(w, user, "(INFO) Manifest sent to '"+user.Name+"'.", ManifestData{
 		Servers:     serverList,
 		ServerOrder: user.ServerOrder,
+		DMServerID:  core.DMServerID,
 	}, "")
 }
 

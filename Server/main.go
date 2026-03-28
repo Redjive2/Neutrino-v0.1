@@ -51,6 +51,8 @@ func main() {
 		fmt.Println("[" + fmt.Sprint(time.Now()) + "]  No snapshot found, starting fresh.")
 	}
 
+	core.EnsureDMServer()
+
 	// Start automatic snapshotting (5-min primary, 1-hour backup)
 	serial.StartAutoSnapshot(snapshotFile, backupFile)
 
@@ -76,6 +78,9 @@ func main() {
 	mux.HandleFunc("POST /new/category/{server}/{name}", mutating(actions.CreateCategory))
 	mux.HandleFunc("POST /new/channel/{server}/{category}/{name}", mutating(actions.CreateChannel))
 	mux.HandleFunc("POST /new/reaction/{server}/{category}/{channel}/{id}", mutating(actions.ReactMessage))
+
+	mux.HandleFunc("POST /new/dm/{targetuser}", mutating(actions.OpenDM))
+	mux.HandleFunc("POST /remove/dm/{channel}", mutating(actions.RemoveDM))
 
 	mux.HandleFunc("POST /join/server/{server}", mutating(actions.JoinServer))
 	mux.HandleFunc("POST /leave/server/{server}", mutating(actions.LeaveServer))
@@ -116,6 +121,7 @@ func main() {
 	mux.HandleFunc("POST /get/channel/{server}/{category}/{channel}", locked(actions.GetChannelData))
 	mux.HandleFunc("POST /get/chat/{server}/{category}/{channel}/{id}", locked(actions.GetChatsSince))
 	mux.HandleFunc("POST /get/sessionstatus", locked(actions.GetSessionStatus))
+	mux.HandleFunc("POST /get/dms", locked(actions.GetDMs))
 
 	// Supervisor endpoint
 	mux.HandleFunc("POST /supervisor/doupdate", func(w http.ResponseWriter, r *http.Request) {

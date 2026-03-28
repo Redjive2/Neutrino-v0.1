@@ -35,6 +35,16 @@ const DeletedUserID = "deleted"
 // DeletedUser is a sentinel user for messages whose author has been removed.
 var DeletedUser = &User{Id: DeletedUserID, Name: "[deleted]"}
 
+// DM system constants
+const (
+	DMServerID    = "dm-system"
+	DMServerName  = "[SYSTEM] Direct Messages"
+	DMCategoryName = "[SYSTEM] DM Category"
+)
+
+// DMServer points to the system DM server after initialization.
+var DMServer *Server
+
 func NewUserID() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -213,4 +223,59 @@ func ResolveChannel(serverId, categoryName, channelName string, user *User) (*Ch
 	}
 
 	return channel, nil
+}
+
+// DMChannelName returns the canonical DM channel name for two users,
+// using their stable IDs in sorted order.
+func DMChannelName(id1, id2 string) string {
+	if id1 > id2 {
+		id1, id2 = id2, id1
+	}
+	return "[SYSTEM] " + id1 + " " + id2
+}
+
+// EnsureDMServer creates the system DM server if it doesn't exist,
+// and ensures all current users are members.
+func EnsureDMServer() {
+	if srv, ok := Servers[DMServerID]; ok {
+		DMServer = srv
+		// Add any users not yet in the server
+		for _, u := range Users {
+			if !slices.Contains(DMServer.Members, u) {
+				DMServer.Members = append(DMServer.Members, u)
+				Dirty = true
+			}
+		}
+		return
+	}
+
+	catId, err := NewCategoryID()
+	if err != nil {
+		panic("could not generate DM category ID: " + err.Error())
+	}
+
+	category := &Category{
+		Id:       catId,
+		Name:     DMCategoryName,
+		Channels: map[string]*Channel{},
+	}
+
+	members := make([]*User, 0, len(Users))
+	for _, u := range Users {
+		members = append(members, u)
+	}
+
+	DMServer = &Server{
+		Id:         DMServerID,
+		Name:       DMServerName,
+		Categories: map[string]*Category{DMCategoryName: category},
+		Owner:      DeletedUser,
+		Members:    members,
+		Thumbnail:  "none",
+		Public:     false,
+	}
+
+	Servers[DMServerID] = DMServer
+	Categories = append(Categories, category)
+	Dirty = true
 }
